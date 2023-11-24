@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog
+from calendar_create import CalendarApp
+from operate import operator
 
 class GUI:
     def __init__(self):
@@ -8,11 +10,6 @@ class GUI:
         self.root.title("Infineon Revenue Report Generator")
         self.root.geometry("1000x800")
         
-        # load the logo in images folder
-        self.logo = tk.PhotoImage(file="images/infineon.gif")
-        self.logo_label = tk.Label(self.root, image=self.logo)
-        self.logo_label.grid(row=0, column=0, columnspan=2)
-        
         # Initialize file path variables
         self.revord_path = tk.StringVar(value="")
         self.ship_to_path = tk.StringVar(value="")
@@ -20,9 +17,11 @@ class GUI:
         self.allocation_path = tk.StringVar(value="")
         self.dn_path = tk.StringVar(value="")
         self.zm_path = tk.StringVar(value="")
+        self.save_path = tk.StringVar(value="")
 
         # Maintain a list of file paths for easy access
         self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.zm_path]
+        self.calendar = CalendarApp(self.root)
         
     def run(self):
         # Run the GUI
@@ -44,15 +43,32 @@ class GUI:
         self.save_path_label.set(path_selected)
         
     def confirm_action(self):
+        # initialize operator
+        self.operator = operator(self)
         # Placeholder for confirm action
-        print("Files to process:")
-        for path in self.file_paths:
-            print(path.get())
+        print("Begin to generate report...")
+        self.operator.sold_to_check()
+        print("Sold-to check completed!")
+        self.operator.ship_to_check()
+        print("Ship-to check completed!")
+        self.operator.allocation_check()
+        print("Allocation check completed!")
+        self.operator.add_dn_infro()
+        print("DN information added!")
+        self.operator.dn_check()
+        print("DN check completed!")
+        
+        print("Report generated successfully!")
 
     def clear_action(self):
         # Clear all file paths
         for path in self.file_paths:
             path.set("")
+        
+        # Clear the selected_date and reset the date label
+        self.calendar.selected_date = []
+        self.calendar.selected_dates_label.config(text='')
+        
     
     def create_button_label(self):
         # Create labels and buttons for file uploads
@@ -108,6 +124,7 @@ class GUI:
         self.confirm_button.grid(row=7, column=0, padx=(5, 10), pady=(40, 10))
         self.clear_button.grid(row=7, column=1, padx=(5, 10), pady=(40, 10))
 
+   
 # Create and run the GUI
 gui = GUI()
 gui.run()

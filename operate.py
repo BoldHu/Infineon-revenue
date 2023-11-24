@@ -35,4 +35,12 @@ class operator(object):
     def allocation_check(self):
         pass
     
+    def add_dn_infro(self):
+        pass
+    
+    def dn_check(self):
+        pass
+    
+    
+    
         

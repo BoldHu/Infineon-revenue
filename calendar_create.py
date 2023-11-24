@@ -6,30 +6,32 @@ from datetime import datetime
 class CalendarApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Date Picker")
         self.current_year = datetime.now().year
         self.current_month = datetime.now().month
 
         # Create a combobox to select month
         self.month_cb = ttk.Combobox(root, values=[calendar.month_name[i] for i in range(1, 13)], state='readonly')
-        self.month_cb.grid(row=0, column=0, padx=10, pady=10)
+        self.month_cb.grid(row=6, column=6, padx=(5, 10), pady=(40, 10))
         self.month_cb.current(self.current_month - 1)
         self.month_cb.bind("<<ComboboxSelected>>", self.update_calendar)
 
         # Create a combobox to select year
         self.year_var = tk.IntVar()
         self.year_cb = ttk.Combobox(root, textvariable=self.year_var, values=[year for year in range(1900, 2101)], state='readonly')
-        self.year_cb.grid(row=0, column=1, padx=10, pady=10)
+        self.year_cb.grid(row=6, column=5, padx=(5, 10), pady=(40, 10))
         self.year_cb.set(self.current_year)
         self.year_cb.bind("<<ComboboxSelected>>", self.update_calendar)
 
         # Create a frame for the calendar
         self.calendar_frame = tk.Frame(root)
-        self.calendar_frame.grid(row=1, column=0, columnspan=2)
-        
-        # Create a label to show selected date
-        self.selected_date_label = tk.Label(root, text="", font=('Arial', 12))
-        self.selected_date_label.grid(row=2, column=0, columnspan=2, pady=10)
+        self.calendar_frame.grid(row=7, column=5, columnspan=2, padx=(5, 10), pady=(40, 10))
+
+        # Initialize an empty list to store selected dates
+        self.selected_dates = []
+
+        # Create a label to show selected dates
+        self.selected_dates_label = tk.Label(root, text="", font=('Arial', 12))
+        self.selected_dates_label.grid(row=7, column=8, columnspan=2, padx=(5, 10), pady=(40, 10))
 
         # Initialize calendar
         self.update_calendar()
@@ -68,10 +70,10 @@ class CalendarApp:
                     btn.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
     def select_date(self, year, month, day):
-        # Update selected date label
-        self.selected_date_label.config(text=f"Selected Date: {day}-{month}-{year}")
-
-# Create the main window
-root = tk.Tk()
-app = CalendarApp(root)
-root.mainloop()
+        # Add selected date to the list
+        selected_date = f"{day}-{month}-{year}"
+        if selected_date not in self.selected_dates:
+            self.selected_dates.append(selected_date)
+        
+        # Update selected dates label
+        self.selected_dates_label.config(text=f"Selected Dates: {', '.join(self.selected_dates)}")
