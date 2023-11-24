@@ -12,20 +12,48 @@ class operator(object):
         
         # this excel file is '.xlsx' format, so we can use pandas to read it directly
         self.revord_df = pd.read_excel(self.revord_path)
-        # self.dn_df = pd.read_excel(self.dn_path)
+        self.dn_df = pd.read_excel(self.dn_path)
         
         # this excel file is '.xls' format, so we need to read it by pandas
         self.sold_to_df = pd.read_excel(self.sold_to_path)
-        # self.ship_to_df = pd.read_excel(self.ship_to_path)
-        # self.allocation_df = pd.read_excel(self.allocation_path)
-        
-        # self.zm_df = self.repair_zm(self)
+        self.ship_to_df = pd.read_excel(self.ship_to_path)
+        self.allocation_df = pd.read_excel(self.allocation_path)
+        self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         
     def repair_zm(self):
         try:
-            df = pd.read_csv(self.zm_path, delim_whitespace=True, error_bad_lines=False, warn_bad_lines=True)
-            df.to_excel('read_text_to_dataframe.xlsx', index=False)
-            return df
+            # Read the .txt file
+            with open(self.zm_path, 'r') as file:
+                lines = file.readlines()
+            
+            # Process each line to get the last 8 values and create a list of lists
+            data = [line.strip().split()[-8:] for line in lines]
+
+            # Create a DataFrame from the data
+            df = pd.DataFrame(data)
+
+            # save the column 1,4,5
+            df = df.iloc[:, [1, 4, 5]]
+
+            # Drop the first line
+            df = df.iloc[1:, :]
+
+            # Rename the last three columns
+            df.columns = [*df.columns[:-3], 'Stock', 'Sloc', 'Sales Product']
+
+            # Convert 'Stock' to numeric for summation
+            df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce')
+
+            # Map 'Sloc' to 'Whorehouse' using self.sloc_to_whr
+            df['Whorehouse'] = df['Sloc'].map(self.sloc_to_whr)
+
+            # Group by 'Whorehouse' and 'Sales Product' and calculate the sum of 'Stock'
+            self.zm_df =  df.groupby(['Sales Product', 'Whorehouse'])['Stock'].sum().reset_index(name='Sum of stock')
+            
+            # save the result
+            self.zm_df.to_excel('Rev activity/zm_df.xlsx')
+            print('zm_df successfully')
+            
         except Exception as e:
             return f'Error reading file: {e}'
     
@@ -33,7 +61,11 @@ class operator(object):
         # Convert 'Sold To No.' column in revord_df to string and remove leading zeros
         self.revord_df['Sold To No.'] = self.revord_df['Sold To No.'].astype(str).str.lstrip('0')
 
-        # Add a new column 'DDL block' with default value ''
+        # Add a new column 'shipping point', 'CPN', 'DDL block' with default value '' and 'EETT', 'ETT' with 0
+        self.revord_df['shipping point'] = ''
+        self.revord_df['CPN'] = ''
+        self.revord_df['EETT'] = 0
+        self.revord_df['ETT'] = 0
         self.revord_df['DDL block'] = ''
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
@@ -82,10 +114,58 @@ class operator(object):
                     self.revord_df.at[index, 'DDL block'] = comment_to_add
     
     def add_dn_infro(self):
-        pass
+        # Iterate through each row in revord_df
+        for index, revord_row in self.revord_df.iterrows():
+            # Find matching rows in dn_df
+            matching_rows = self.dn_df[
+                (self.dn_df['Sales Doc.'] == revord_row['Sales Document']) &
+                (self.dn_df['Item'] == revord_row['Sales Document Item'])
+            ]
+
+            # If there's a match, update the relevant columns in revord_df
+            if not matching_rows.empty:
+                # Assuming the first matching row is the relevant one
+                matching_row = matching_rows.iloc[0]
+
+                # Update 'shipping point', 'EETT', 'ETT', 'CPN' in revord_df with values from dn_df
+                self.revord_df.at[index, 'shipping point'] = matching_row['ShPt']
+                # check nan, padding with 0
+                if pd.notna(matching_row['EETT']):
+                    self.revord_df.at[index, 'EETT'] = matching_row['EETT']
+                if pd.notna(matching_row['ETT']):
+                    self.revord_df.at[index, 'ETT'] = matching_row['ETT']
+                self.revord_df.at[index, 'CPN'] = matching_row['Customer Material Number']
     
     def dn_check(self):
+        # Iterate through each row in revord_df
+        for index, row in self.revord_df.iterrows():
+            # Prepare the comment to be added
+            comment_to_add = 'CPN+Plant block'
+
+            # Get the first and second column names of CPN_df
+            first_column = self.CPN_df.columns[0]
+            second_column = self.CPN_df.columns[1]
+
+            # Check if there is a matching row in self.CPN_df
+            if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant'])):
+                # Check if 'DDL block' column already has a value
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    # Concatenate new comment with existing comment
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                else:
+                    # Update 'DDL block' column with new comment
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+    
+    def cal_stock(self):
         pass
+    
+    def cal_proposed_day(self):
+        pass
+    
+    def remark(self):
+        pass
+    
+    
     
     
     
