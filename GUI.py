@@ -8,7 +8,8 @@ class GUI:
         # Create main window
         self.root = tk.Tk()
         self.root.title("Infineon Revenue Report Generator")
-        self.root.geometry("1000x800")
+        # full screen
+        self.root.state('zoomed')
         
         # Initialize file path variables
         self.revord_path = tk.StringVar(value="")
@@ -33,14 +34,14 @@ class GUI:
         label.config(text="Uploading...")
         path_selected = filedialog.askopenfilename()
         path.set(path_selected)
-        label.set(path_selected)
+        label.config(text=path_selected)
         
     def select_save_path(self):
         # Select the path to save the report
         self.save_path.set("Selecting...")
         path_selected = filedialog.askdirectory()
         self.save_path.set(path_selected)
-        self.save_path_label.set(path_selected)
+        self.save_path_label.config(text=path_selected)
         
     def confirm_action(self):
         # initialize operator
@@ -57,6 +58,8 @@ class GUI:
         print("DN information added!")
         self.operator.dn_check()
         print("DN check completed!")
+        self.operator.repair_zm()
+        print("ZM repaired!")
         
         print("Report generated successfully!")
 
@@ -69,7 +72,6 @@ class GUI:
         self.calendar.selected_date = []
         self.calendar.selected_dates_label.config(text='')
         
-    
     def create_button_label(self):
         # Create labels and buttons for file uploads
         # First is revord Excel
@@ -83,15 +85,15 @@ class GUI:
         self.ship_to_path_label = tk.Label(self.root, textvariable=self.ship_to_path)
         upload_ship_to = lambda: self.upload_file(self.ship_to_path, self.ship_to_path_label)
         self.ship_to_upload_button = tk.Button(self.root, text="Upload Ship-to Excel", command=upload_ship_to)
-        self.ship_to_upload_button.grid(row=2, column=0, padx=(5, 10), pady=(40, 10))
-        self.ship_to_path_label.grid(row=2, column=1, padx=(5, 10), pady=(40, 10))
+        self.ship_to_upload_button.grid(row=3, column=0, padx=(5, 10), pady=(40, 10))
+        self.ship_to_path_label.grid(row=3, column=1, padx=(5, 10), pady=(40, 10))
         
         # third is sold-to excel
         self.sold_to_path_label = tk.Label(self.root, textvariable=self.sold_to_path)
         upload_sold_to = lambda: self.upload_file(self.sold_to_path, self.sold_to_path_label)
         self.sold_to_upload_button = tk.Button(self.root, text="Upload Sold-to Excel", command=upload_sold_to)
-        self.sold_to_upload_button.grid(row=3, column=0, padx=(5, 10), pady=(40, 10))
-        self.sold_to_path_label.grid(row=3, column=1, padx=(5, 10), pady=(40, 10))
+        self.sold_to_upload_button.grid(row=2, column=0, padx=(5, 10), pady=(40, 10))
+        self.sold_to_path_label.grid(row=2, column=1, padx=(5, 10), pady=(40, 10))
         
         # fourth is allocation excel
         self.allocation_path_label = tk.Label(self.root, textvariable=self.allocation_path)
@@ -118,9 +120,9 @@ class GUI:
         self.confirm_button = tk.Button(self.root, text="Confirm", command=self.confirm_action)
         self.clear_button = tk.Button(self.root, text="Clear", command=self.clear_action)
         self.save_button = tk.Button(self.root, text="Save", command=self.select_save_path)
-        self.save_path_label = tk.Label(self.root, textvariable=self.select_save_path)
-        self.save_button.grid(row=8, column=0, padx=(5, 10), pady=(40, 10))
-        self.save_path_label.grid(row=8, column=1, padx=(5, 10), pady=(40, 10))
+        self.save_path_label = tk.Label(self.root, textvariable=self.save_path)
+        self.save_button.grid(row=1, column=2, padx=(5, 10), pady=(40, 10))
+        self.save_path_label.grid(row=1, column=3, padx=(5, 10), pady=(40, 10))
         self.confirm_button.grid(row=7, column=0, padx=(5, 10), pady=(40, 10))
         self.clear_button.grid(row=7, column=1, padx=(5, 10), pady=(40, 10))
 
