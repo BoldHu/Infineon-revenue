@@ -1,4 +1,9 @@
 import pandas as pd
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from openpyxl.utils import get_column_letter
+import os
+from datetime import datetime, timedelta
 
 class operator(object):
     def __init__(self, GUI):
@@ -7,7 +12,7 @@ class operator(object):
         self.sold_to_path = GUI.sold_to_path.get()
         self.allocation_path = GUI.allocation_path.get()
         self.dn_path = GUI.dn_path.get()
-        self.zm_path = GUI.zm_path.get()
+        self.stock_path = GUI.stock_path.get()
         self.save_path = GUI.save_path.get()
         
         # memory the last working day and holiday
@@ -23,43 +28,6 @@ class operator(object):
         self.ship_to_df = pd.read_excel(self.ship_to_path)
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
-        
-    def repair_zm(self):
-        try:
-            # Read the .txt file
-            with open(self.zm_path, 'r') as file:
-                lines = file.readlines()
-            
-            # Process each line to get the last 8 values and create a list of lists
-            data = [line.strip().split()[-8:] for line in lines]
-
-            # Create a DataFrame from the data
-            df = pd.DataFrame(data)
-
-            # save the column 1,4,5
-            df = df.iloc[:, [1, 4, 5]]
-
-            # Drop the first line
-            df = df.iloc[1:, :]
-
-            # Rename the last three columns
-            df.columns = [*df.columns[:-3], 'Stock', 'Sloc', 'Sales Product']
-
-            # Convert 'Stock' to numeric for summation
-            df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce')
-
-            # Map 'Sloc' to 'Whorehouse' using self.sloc_to_whr
-            df['Whorehouse'] = df['Sloc'].map(self.sloc_to_whr)
-
-            # Group by 'Whorehouse' and 'Sales Product' and calculate the sum of 'Stock'
-            self.zm_df =  df.groupby(['Sales Product', 'Warehouse'])['Stock'].sum().reset_index(name='Sum of stock')
-            
-            # save the result
-            self.zm_df.to_excel('Rev activity/zm_df.xlsx')
-            print('zm_df successfully')
-            
-        except Exception as e:
-            return f'Error reading file: {e}'
     
     def sold_to_check(self):
         # Convert 'Sold To No.' column in revord_df to string and remove leading zeros
@@ -171,10 +139,11 @@ class operator(object):
 
         # Iterate through each row in revord_df
         for index, revord_row in self.revord_df.iterrows():
-            # Find matching rows in zm_df
-            matching_rows = self.zm_df[
-                (self.zm_df['Sales Product'] == revord_row['Material entered']) &
-                (self.zm_df['Warehouse'] == revord_row['Plant'])
+            # Find matching rows in stock_df
+            matching_rows = self.stock_df[
+                (self.stock_df['SP'] == revord_row['Material entered']) &
+                (self.stock_df['Plnt'] == revord_row['Plant']) &
+                (self.stock_df['Material'] == revord_row['Material'])
             ]
 
             # If there's a match, update the 'Stock' value in revord_df
@@ -182,21 +151,52 @@ class operator(object):
                 # Assuming the first matching row is the relevant one
                 matching_row = matching_rows.iloc[0]
 
-                # Update 'Stock' in revord_df with 'Sum of stock' from zm_df
-                self.revord_df.at[index, 'Stock'] = matching_row['Sum of stock']
+                # Update 'Stock' in revord_df with 'Sum of stock' from stock_df
+                self.revord_df.at[index, 'Stock'] = matching_row['FREEQTY']
     
     def cal_proposed_day(self):
-        pass
-    
-    def add_remark(self):
         pass
     
     def arrange_stock(self):
         pass
 
     def save(self):
-        # write the self.df to excel by specific path and format
-        pass
+        # write the self.revord_df to excel by specific path and format
+        # create a new excel file
+        wb = Workbook()
+        # create a new sheet
+        ws = wb.active
+        # set the sheet name
+        ws.title = 'RevOrd'
+        # set the font
+        font = Font(name='Arial', size=10)
+        # set the writer
+        writer = pd.ExcelWriter(os.path.join(self.save_path, 'infineon revenue'), engine='openpyxl')
+        writer.book = wb
+        # write the self.revord_df to excel
+        self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
+        # set the column width
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            adjusted_width = (max_length + 2) * 1.2
+            ws.column_dimensions[column].width = adjusted_width
+            
+        # set the header style grey and center and bold
+        for cell in ws[1]:
+            cell.fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True)
+            
+        # save the excel file
+        writer.save()
+        # close the excel file
+        writer.close()
+
+        
     
     
     

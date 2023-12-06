@@ -17,11 +17,11 @@ class GUI:
         self.sold_to_path = tk.StringVar(value="")
         self.allocation_path = tk.StringVar(value="")
         self.dn_path = tk.StringVar(value="")
-        self.zm_path = tk.StringVar(value="")
+        self.stock_path = tk.StringVar(value="")
         self.save_path = tk.StringVar(value="")
 
         # Maintain a list of file paths for easy access
-        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.zm_path]
+        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.stock_path]
         self.calendar = CalendarApp(self.root)
         
     def run(self):
@@ -58,8 +58,16 @@ class GUI:
         print("DN information added!")
         self.operator.dn_check()
         print("DN check completed!")
-        self.operator.repair_zm()
-        print("ZM repaired!")
+        # self.operator.repair_zm()
+        # print("ZM repaired!")
+        self.operator.add_stock()
+        print("Stock added!")
+        self.operator.add_proposed_pgi()
+        print("Proposed PGI added!")
+        self.operator.arrange_stock()
+        print("Stock arranged!")
+        self.operator.save()
+        print("Report saved!")
         
         print("Report generated successfully!")
 
@@ -111,12 +119,12 @@ class GUI:
         self.dn_upload_button.grid(row=5, column=0, padx=(5, 10), pady=(40, 10))
         self.dn_path_label.grid(row=5, column=1, padx=(5, 10), pady=(40, 10))
 
-        # sixth is ZM excel
-        self.zm_path_label = tk.Label(self.root, textvariable=self.zm_path)
-        upload_zm = lambda: self.upload_file(self.zm_path, self.zm_path_label)
-        self.zm_upload_button = tk.Button(self.root, text="Upload ZM Excel", command=upload_zm)
-        self.zm_upload_button.grid(row=6, column=0, padx=(5, 10), pady=(40, 10))
-        self.zm_path_label.grid(row=6, column=1, padx=(5, 10), pady=(40, 10))
+        # sixth is stock excel
+        self.stock_path_label = tk.Label(self.root, textvariable=self.stock_path)
+        upload_stock = lambda: self.upload_file(self.stock_path, self.stock_path_label)
+        self.stock_upload_button = tk.Button(self.root, text="Upload stock Excel", command=upload_stock)
+        self.stock_upload_button.grid(row=6, column=0, padx=(5, 10), pady=(40, 10))
+        self.stock_path_label.grid(row=6, column=1, padx=(5, 10), pady=(40, 10))
 
         # Create Confirm, save and Clear buttons
         self.confirm_button = tk.Button(self.root, text="Confirm", command=self.confirm_action)
