@@ -276,7 +276,7 @@ class operator(object):
 
             # Set header style
             for cell in worksheet[1]:
-                cell.fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
+                cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
                 cell.alignment = Alignment(horizontal='center', vertical='center')
                 cell.font = Font(bold=True)
     
