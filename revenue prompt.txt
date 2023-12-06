@@ -13,6 +13,11 @@ Sixthly, complete the function of repair_zm. Now I have a .txt file that has som
 self.sloc_to_whr = {'LA00': 'WA00', 
                             }
 And based on the value of 'Whorehouse' and 'Sales Product' group the dataframe and calculate the sum of 'Stock' of every group. And save the result to the new dataframe involving 'Sales Product', 'Whorehouse' and 'Sum of stock'. 
+
+Seventhly, complete the function of add_stock. If we find the same value of 'Sales Product' and 'Warehouse' in self.zm_df with value of 'Material entered' and 'Plant' in revord_df simultaneously, that line's 'Stock' in revord_df is equal to 'Sum of stock' in zm_df. 
+
+Eighthly, complete the function of cal_proposed_day. Make operation for every line in revord_df. The self.selected_last_working_day and self.selected_holiday is like ['2023-12-29']. Please transfer it to date which can be compared. 
+We compare the self.selected_last_working_day which is a list and has one value with the value of column 'Goods Issue Date'. If Goods Issue Date <= last working day, the 'Remark' in revord_df is 'Open AT' and 'Proposed PGI' is equal the value of 'Goods Issue Date' in revord_df. If Goods Issue Date > last working day, the 'Remark' in revord_df is 'Potential' and 'Proposed PGI' is equal the value of 'Goods Issue Date' in revord_df.
  
 My code is:
 import pandas as pd

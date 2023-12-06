@@ -60,7 +60,7 @@ class GUI:
         print("DN check completed!")
         self.operator.add_stock()
         print("Stock added!")
-        self.operator.add_proposed_pgi()
+        self.operator.cal_proposed_day()
         print("Proposed PGI added!")
         self.operator.arrange_stock()
         print("Stock arranged!")
