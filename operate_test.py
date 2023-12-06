@@ -20,7 +20,10 @@ class operator(object):
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         
-        # dict to store the relationship of Sloc and whorehouse
+        self.last_working_day = ['2023-12-29']
+        self.holiday = ['2023-12-25']
+        
+        # dict to store the relationship of Sloc and Warehouse
         self.sloc_to_whr = {
             'LA00': 'WA00', 
             'LA00': 'WA01',
@@ -68,11 +71,11 @@ class operator(object):
             # Convert 'Stock' to numeric for summation
             df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce')
 
-            # Map 'Sloc' to 'Whorehouse' using self.sloc_to_whr
-            df['Whorehouse'] = df['Sloc'].map(self.sloc_to_whr)
+            # Map 'Sloc' to 'Warehouse' using self.sloc_to_whr
+            df['Warehouse'] = df['Sloc'].map(self.sloc_to_whr)
 
-            # Group by 'Whorehouse' and 'Sales Product' and calculate the sum of 'Stock'
-            self.zm_df =  df.groupby(['Sales Product', 'Whorehouse'])['Stock'].sum().reset_index(name='Sum of stock')
+            # Group by 'Warehouse' and 'Sales Product' and calculate the sum of 'Stock'
+            self.zm_df =  df.groupby(['Sales Product', 'Warehouse'])['Stock'].sum().reset_index(name='Sum of stock')
             
             # save the result
             self.zm_df.to_excel('Rev activity/zm_df.xlsx')
@@ -91,6 +94,10 @@ class operator(object):
         self.revord_df['EETT'] = 0
         self.revord_df['ETT'] = 0
         self.revord_df['DDL block'] = ''
+        self.revord_df['Stock'] = 0
+        self.revord_df['Proposed PGI'] = ''
+        self.revord_df['Remark'] = ''
+        self.revord_df['Arrange stock'] = ''
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
         self.sold_to_df['SoldTo'] = self.sold_to_df['SoldTo'].astype(str)
@@ -197,29 +204,57 @@ class operator(object):
         self.revord_df.to_excel('Rev activity/dn_check.xlsx')
         print('dn check')
     
-    def cal_stock(self):
-        pass
+    def add_stocks(self):
+        # Ensure that 'Stock' column exists in revord_df
+        if 'Stock' not in self.revord_df.columns:
+            self.revord_df['Stock'] = 0
+
+        # Iterate through each row in revord_df
+        for index, revord_row in self.revord_df.iterrows():
+            # Find matching rows in zm_df
+            matching_rows = self.zm_df[
+                (self.zm_df['Sales Product'] == revord_row['Material entered']) &
+                (self.zm_df['Warehouse'] == revord_row['Plant'])
+            ]
+
+            # If there's a match, update the 'Stock' value in revord_df
+            if not matching_rows.empty:
+                # Assuming the first matching row is the relevant one
+                matching_row = matching_rows.iloc[0]
+
+                # Update 'Stock' in revord_df with 'Sum of stock' from zm_df
+                self.revord_df.at[index, 'Stock'] = matching_row['Sum of stock']
+        # save the result
+        self.revord_df.to_excel('Rev activity/add_stock.xlsx', index=False)
+        print('add stock completed!')
     
     def cal_proposed_day(self):
         pass
     
-    def remark(self):
+    def arrange_stock(self):
+        pass
+
+    def save(self):
+        # write the self.df to excel by specific path and format
         pass
     
 if  __name__ == '__main__':
     operator = operator()
-    # operator.sold_to_check()
-    # print("Sold-to check completed!")
-    # operator.ship_to_check()
-    # print("Ship-to check completed!")
-    # operator.allocation_check()
-    # print("Allocation check completed!")
-    # operator.add_dn_infro()
-    # print("DN information added!")
-    # operator.dn_check()
-    # print("DN check completed!")
+    operator.sold_to_check()
+    print("Sold-to check completed!")
+    operator.ship_to_check()
+    print("Ship-to check completed!")
+    operator.allocation_check()
+    print("Allocation check completed!")
+    operator.add_dn_infro()
+    print("DN information added!")
+    operator.dn_check()
+    print("DN check completed!")
     print(operator.repair_zm())
     print("ZM repaired!")
+    operator.add_stock()
+    print("Stock added!")
+    
     
     print("Report generated successfully!")
         

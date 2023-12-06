@@ -69,8 +69,10 @@ class GUI:
             path.set("")
         
         # Clear the selected_date and reset the date label
-        self.calendar.selected_date = []
-        self.calendar.selected_dates_label.config(text='')
+        self.calendar.selected_holiday = []
+        self.calendar.holiday_label.config(text='')
+        self.calendar.selected_last_working_day = []
+        self.calendar.lwd_label.config(text='')
         
     def create_button_label(self):
         # Create labels and buttons for file uploads

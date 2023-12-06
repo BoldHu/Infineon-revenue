@@ -10,6 +10,10 @@ class operator(object):
         self.zm_path = GUI.zm_path.get()
         self.save_path = GUI.save_path.get()
         
+        # memory the last working day and holiday
+        self.last_working_day = GUI.calendar.selected_last_working_day
+        self.holiday = GUI.calendar.selected_holiday
+        
         # this excel file is '.xlsx' format, so we can use pandas to read it directly
         self.revord_df = pd.read_excel(self.revord_path)
         self.dn_df = pd.read_excel(self.dn_path)
@@ -48,7 +52,7 @@ class operator(object):
             df['Whorehouse'] = df['Sloc'].map(self.sloc_to_whr)
 
             # Group by 'Whorehouse' and 'Sales Product' and calculate the sum of 'Stock'
-            self.zm_df =  df.groupby(['Sales Product', 'Whorehouse'])['Stock'].sum().reset_index(name='Sum of stock')
+            self.zm_df =  df.groupby(['Sales Product', 'Warehouse'])['Stock'].sum().reset_index(name='Sum of stock')
             
             # save the result
             self.zm_df.to_excel('Rev activity/zm_df.xlsx')
@@ -67,6 +71,10 @@ class operator(object):
         self.revord_df['EETT'] = 0
         self.revord_df['ETT'] = 0
         self.revord_df['DDL block'] = ''
+        self.revord_df['Stock'] = 0
+        self.revord_df['Proposed PGI'] = ''
+        self.revord_df['Remark'] = ''
+        self.revord_df['Arrange stock'] = ''
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
         self.sold_to_df['SoldTo'] = self.sold_to_df['SoldTo'].astype(str)
@@ -156,13 +164,38 @@ class operator(object):
                     # Update 'DDL block' column with new comment
                     self.revord_df.at[index, 'DDL block'] = comment_to_add
     
-    def cal_stock(self):
-        pass
+    def add_stock(self):
+        # Ensure that 'Stock' column exists in revord_df
+        if 'Stock' not in self.revord_df.columns:
+            self.revord_df['Stock'] = 0
+
+        # Iterate through each row in revord_df
+        for index, revord_row in self.revord_df.iterrows():
+            # Find matching rows in zm_df
+            matching_rows = self.zm_df[
+                (self.zm_df['Sales Product'] == revord_row['Material entered']) &
+                (self.zm_df['Warehouse'] == revord_row['Plant'])
+            ]
+
+            # If there's a match, update the 'Stock' value in revord_df
+            if not matching_rows.empty:
+                # Assuming the first matching row is the relevant one
+                matching_row = matching_rows.iloc[0]
+
+                # Update 'Stock' in revord_df with 'Sum of stock' from zm_df
+                self.revord_df.at[index, 'Stock'] = matching_row['Sum of stock']
     
     def cal_proposed_day(self):
         pass
     
-    def remark(self):
+    def add_remark(self):
+        pass
+    
+    def arrange_stock(self):
+        pass
+
+    def save(self):
+        # write the self.df to excel by specific path and format
         pass
     
     

@@ -1,0 +1,58 @@
+Now you are an expert in Python and Pandas. Please read the code and help me complete the function step by step. 
+Firstly, complete the function of sold_to_check. Add a new column to revord_df named 'DDL block'. If we find the same value of 'SoldTo' column in sold_to_df with value of 'Sold To No.' in revord_df, that line add comment 'sold to block' to 'DDL block' column. Pay attention: the value in revord_df may be like '0004004466' and you should eliminate the '0' at the beginning of the string. 
+
+Secondly, complete the funtion of ship_to_check. If we find the same value of 'ShipTo' column in ship_to_df with value of 'Ship To No.' in revord_df, that line add comment 'ship to block' to 'DDL block' column. If that line has value in 'DDL block column', you should concat the two comment. Pay attention: the value in revord_df may be like '0004004466' and you should eliminate the '0' at the beginning of the string. 
+
+Thirdly, complete the function of allocation_check. If we find the same value of 'SP' and 'Plant' in allocation_df with value of 'Material entered' and 'Plant' in revord_df simultaneously, that line add comment [Material entered + Plant + ' block'] to 'DDL block' column. If that line has value in 'DDL block column', you should concat the two comment.
+
+Fourthly, complete teh function of add_dn_infro. If we find the same value of 'Sales Doc.' and 'Item' in allocation_df with value of 'Sales Document' and 'Sales Document Item' in revord_df simultaneously, that line's value of column of 'shipping point', 'EETT', 'ETT', 'CPN' in revord_df assign the value of column of 'ShPt', 'EETT', 'ETT', 'Customer Material Number'. 
+
+Fifthly, complete the function of df_check. If we find the same value of the first column and the second column in CPN_df with value of 'CPN' and 'Plant' inrevord_df simultaneously, that line add comment 'CPN+Plant block' to 'DDL block' column. If that line has value in 'DDL block column', you should concat the two comment.
+
+Sixthly, complete the function of repair_zm. Now I have a .txt file that has some missing values in lines. You should only read the final 8 value in every line to a dataframe. And drop the column if its values are 0 or nan. And drop the final two column. Renam the last three column name to ['Stock', 'Sloc', 'Sales Product']. And use the self.sloc_to_whr dict to add the value to a new column Whorehouse. The dict is like:         
+self.sloc_to_whr = {'LA00': 'WA00', 
+                            }
+And based on the value of 'Whorehouse' and 'Sales Product' group the dataframe and calculate the sum of 'Stock' of every group. And save the result to the new dataframe involving 'Sales Product', 'Whorehouse' and 'Sum of stock'. 
+ 
+My code is:
+import pandas as pd
+
+class operator(object):
+    def __init__(self, GUI):
+        self.revord_path = GUI.revord_path.get()
+        self.ship_to_path = GUI.ship_to_path.get()
+        self.sold_to_path = GUI.sold_to_path.get()
+        self.allocation_path = GaUI.allocation_path.get()
+        self.dn_path = GUI.dn_path.get()
+        self.zm_path = GUI.zm_path.get()
+        self.save_path = GUI.save_path.get()
+        
+        self.revord_df = pd.read_excel(self.revord_path)
+        self.ship_to_df = pd.read_excel(self.ship_to_path)
+        self.sold_to_df = pd.read_excel(self.sold_to_path)
+        self.allocation_df = pd.read_excel(self.allocation_path)
+        self.dn_df = pd.read_excel(self.dn_path)
+        self.zm_df = self.repair_zm(self)
+        
+    def repair_zm(self):
+        try:
+            df = pd.read_csv(self.zm_path, delim_whitespace=True, error_bad_lines=False, warn_bad_lines=True)
+            df.to_excel('read_text_to_dataframe.xlsx', index=False)
+            return df
+        except Exception as e:
+            return f'Error reading file: {e}'
+    
+    def sold_to_check(self):
+        pass
+    
+    def ship_to_check(self):
+        pass
+    
+    def allocation_check(self):
+        pass
+    
+    def add_dn_infro(self):
+        pass
+    
+    def dn_check(self):
+        pass

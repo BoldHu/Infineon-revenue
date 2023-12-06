@@ -1,0 +1,21 @@
+Now you are an expert in Python and Pandas. Please follow my instruct to write Python code. Firstly, write a class GUI which use tkinter to create an interface for user to upload file and click the button to begin calculate. The interface should have 6 button to let user upload excel file and 6 labels to show the file location. And a button to confirm and a buttono to clear. 
+
+1. 以revord文件为基础
+
+2. 读取soldto，如果soldto在base表格存在，则ddl block添加评论
+
+2. 读取shipto，如果shipto在base表格存在，则ddl block添加评论
+
+2. 读取allocation，如果SP+plant在base表格存在，则ddl block添加评论
+
+3. 读取DN表格，根据sales document和item将ship point/EETT/ETT/CPN添加进去，Customer就是CPN
+
+3. 根据base表格中的CPN和plant在allocation的第二场表格CPN中寻找，找到的话ddl添加评论
+
+4. 让错误表格正常化
+
+4. stock表格的sp和plant对应base表格，根据SP和plant计算每一行的stock
+
+5. 获取公共节假日天数，获取上一个最后工作日，计算发货时间，给出发货评论（待定）
+
+6. 安排出货（待定）
