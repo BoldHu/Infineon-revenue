@@ -155,12 +155,65 @@ class operator(object):
                 self.revord_df.at[index, 'Stock'] = matching_row['FREEQTY']
     
     def cal_proposed_day(self):
-        pass
+        def cal_date(self, date, dw):
+            # Convert the string date to a datetime object for comparison
+            start_date = datetime.strptime(date, '%Y-%m-%d').date()
+            # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
+            holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
+            days_to_subtract = dw
+            while days_to_subtract > 0:
+                start_date -= timedelta(days=1)
+                # Skip weekends and holidays
+                if start_date.weekday() >= 5 or start_date in holidays:
+                    continue
+                else:
+                    days_to_subtract -= 1
+            return start_date
+        
+        # Convert the string date to a datetime object for comparison
+        last_working_day = datetime.strptime(self.last_working_day[0], '%Y-%m-%d').date()
+        # Iterate through each row in revord_df
+        for index, row in self.revord_df.iterrows():
+            # Convert 'Goods Issue Date' to datetime.date for comparison
+            goods_issue_date = datetime.strptime(row['Goods Issue Date'], '%Y-%m-%d').date()
+            dw = int(row['Del Windows Minus'])
+            crd = datetime.strptime(row['Customer requested date'], '%Y-%m-%d').date()
+            # the EETT and ETT is like '1,00' and '2,00', convert it to int 1, 2...
+            eett = int(row['EETT'].split(',')[0])
+            ett = int(row['ETT'].split(',')[0])
+
+            # Check the conditions and update 'Remark' and 'Proposed PGI' accordingly
+            if goods_issue_date <= last_working_day:
+                self.revord_df.at[index, 'Remark'] = 'Open AT'
+                self.revord_df.at[index, 'Proposed PGI'] = goods_issue_date
+            else:
+                if cal_date(goods_issue_date, dw) <= last_working_day:
+                    if crd-ett-eett <= last_working_day:
+                        self.revord_df.at[index, 'Remark'] = 'Open AT'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(last_working_day, dw) # last_working_day - dw
+                    else:
+                        self.revord_df.at[index, 'Remark'] = 'DW potential'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(goods_issue_date, dw) # goods_issue_date - dw
+                else:
+                    if crd - ett - eett <= last_working_day:
+                        self.revord_df.at[index, 'Remark'] = 'Due CRD with late GI'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                    else:
+                        if cal_date(date=crd, dw=ett+eett) <= last_working_day:
+                            self.revord_df.at[index, 'Remark'] = 'CRD potential with late GI'
+                            self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                        else:
+                            self.revord_df.at[index, 'Remark'] = 'No potential'
+                            self.revord_df.at[index, 'Proposed PGI'] = None
     
     def arrange_stock(self):
         pass
 
     def save(self):
+        # modify the self.revord_df the format of 'Customer requested date' and 'Goods Issue Date' and 'Delivery Date' to yyyy/mm/dd
+        self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
+        self.revord_df['Goods Issue Date'] = self.revord_df['Goods Issue Date'].dt.strftime('%Y/%m/%d')
+        self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
         # write the self.revord_df to excel by specific path and format
         # create a new excel file
         wb = Workbook()
@@ -195,11 +248,3 @@ class operator(object):
         writer.save()
         # close the excel file
         writer.close()
-
-        
-    
-    
-    
-    
-    
-        

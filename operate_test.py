@@ -179,6 +179,10 @@ class operator(object):
         pass
 
     def save(self):
+        # modify the self.revord_df the format of 'Customer requested date' and 'Goods Issue Date' and 'Delivery Date' to yyyy/mm/dd
+        self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
+        self.revord_df['Goods Issue Date'] = self.revord_df['Goods Issue Date'].dt.strftime('%Y/%m/%d')
+        self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
         # write the self.revord_df to excel by specific path and format
         # create a new excel file
         wb = Workbook()
