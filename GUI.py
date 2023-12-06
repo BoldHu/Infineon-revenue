@@ -18,10 +18,11 @@ class GUI:
         self.allocation_path = tk.StringVar(value="")
         self.dn_path = tk.StringVar(value="")
         self.stock_path = tk.StringVar(value="")
+        self.customer_priority_path = tk.StringVar(value="")
         self.save_path = tk.StringVar(value="")
 
         # Maintain a list of file paths for easy access
-        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.stock_path]
+        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.stock_path, self.customer_priority_path]
         self.calendar = CalendarApp(self.root)
         
     def run(self):
@@ -123,6 +124,13 @@ class GUI:
         self.stock_upload_button = tk.Button(self.root, text="Upload stock Excel", command=upload_stock)
         self.stock_upload_button.grid(row=6, column=0, padx=(5, 10), pady=(40, 10))
         self.stock_path_label.grid(row=6, column=1, padx=(5, 10), pady=(40, 10))
+        
+        # seventh is customer priority excel
+        self.customer_priority_path_label = tk.Label(self.root, textvariable=self.customer_priority_path)
+        upload_customer_priority = lambda: self.upload_file(self.customer_priority_path, self.customer_priority_path_label)
+        self.customer_priority_upload_button = tk.Button(self.root, text="Upload Customer Priority Excel", command=upload_customer_priority)
+        self.customer_priority_upload_button.grid(row=2, column=2, padx=(5, 10), pady=(40, 10))
+        self.customer_priority_path_label.grid(row=2, column=3, padx=(5, 10), pady=(40, 10))
 
         # Create Confirm, save and Clear buttons
         self.confirm_button = tk.Button(self.root, text="Confirm", command=self.confirm_action)

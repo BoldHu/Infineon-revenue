@@ -13,6 +13,7 @@ class operator(object):
         self.allocation_path = GUI.allocation_path.get()
         self.dn_path = GUI.dn_path.get()
         self.stock_path = GUI.stock_path.get()
+        self.customer_priority_path = GUI.customer_priority_path.get()
         self.save_path = GUI.save_path.get()
         
         # memory the last working day and holiday
@@ -29,6 +30,7 @@ class operator(object):
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         self.stock_df = pd.read_excel(self.stock_path)
+        self.customer_priority_df = pd.read_excel(self.customer_priority_path)
     
     def sold_to_check(self):
         # Convert 'Sold To No.' column in revord_df to string and remove leading zeros
@@ -43,6 +45,7 @@ class operator(object):
         self.revord_df['Stock'] = 0
         self.revord_df['Proposed PGI'] = ''
         self.revord_df['Remark'] = ''
+        self.revord_df['leaf seller'] = ''
         self.revord_df['Arrange stock'] = ''
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
@@ -112,6 +115,8 @@ class operator(object):
                 if pd.notna(matching_row['ETT']):
                     self.revord_df.at[index, 'ETT'] = matching_row['ETT']
                 self.revord_df.at[index, 'CPN'] = matching_row['Customer Material Number']
+                # update leaf seller and modify the value of 'Seller H' column. It is like 'ABB_4051490_WF00::LEVEL3'. We need the string before '::'
+                self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
     
     def dn_check(self):
         # Iterate through each row in revord_df
@@ -226,7 +231,43 @@ class operator(object):
                             self.revord_df.at[index, 'Proposed PGI'] = None
     
     def arrange_stock(self):
-        pass
+        # Add new columns with default values
+        self.revord_df['Priority'] = 1
+        self.revord_df['sum of value'] = 0
+
+        # Set Priority and calculate 'sum of value'
+        for index, row in self.revord_df.iterrows():
+            matching_rows = self.customer_priority_df[
+                (self.customer_priority_df['Sales Product #'] == row['Material entered']) & 
+                (self.customer_priority_df['Leaf Seller'] == row['leaf seller'])
+            ]
+            if not matching_rows.empty:
+                priority = matching_rows.iloc[0]['Calculated JIRA Prio']
+                self.revord_df.at[index, 'Priority'] = priority
+            self.revord_df.at[index, 'sum of value'] = row['Priority']* row['Net Value In EUR']
+
+        # Subgroup by 'Material entered' and 'Plant'
+        grouped = self.revord_df.groupby(['Material entered', 'Plant'])
+
+        for name, group in grouped:
+            # Sort the group by 'sum of value'
+            sorted_group = group.sort_values(by='sum of value', ascending=False)
+
+            # Initialize rest_stock
+            rest_stock = sorted_group.iloc[0]['Stock']
+
+            for index, row in sorted_group.iterrows():
+                if pd.notna(row['DDL block']) or row['Stock'] == 0 or row['Remark'] == "No potential":
+                    self.revord_df.at[index, 'Arrange stock'] = -1
+                else:
+                    if rest_stock > row['Open Quantity']:
+                        # Shipment can be made
+                        self.revord_df.at[index, 'Arrange stock'] = 1
+                        rest_stock -= row['Open Quantity']
+                    else:
+                        # Shipment cannot be made
+                        self.revord_df.at[index, 'Arrange stock'] = 0
+
 
     def save(self):
         # Format dates in the DataFrame

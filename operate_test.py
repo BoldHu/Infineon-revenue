@@ -14,6 +14,7 @@ class operator(object):
         self.dn_path = 'Rev activity/ZSD_CHIPBIZ_DN 2023115.XLSX'
         self.stock_path = 'Rev activity/Stock via SQ01.XLSX'
         self.save_path = 'Rev activity/'
+        self.customer_priority_path = 'Rev activity/RPA_WeekDayAllocBot_Prio_List_Global - priority.xlsx'
         
         # this excel file is '.xlsx' format, so we can use pandas to read it directly
         self.revord_df = pd.read_excel(self.revord_path)
@@ -25,6 +26,7 @@ class operator(object):
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         self.stock_df = pd.read_excel(self.stock_path)
+        self.customer_priority_df = pd.read_excel(self.customer_priority_path)
         
         self.last_working_day = ['2023-12-29']
         self.holiday = ['2023-12-25']
@@ -42,6 +44,7 @@ class operator(object):
         self.revord_df['Stock'] = 0
         self.revord_df['Proposed PGI'] = ''
         self.revord_df['Remark'] = ''
+        self.revord_df['leaf seller'] = ''
         self.revord_df['Arrange stock'] = ''
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
@@ -122,6 +125,9 @@ class operator(object):
                 if pd.notna(matching_row['ETT']):
                     self.revord_df.at[index, 'ETT'] = matching_row['ETT']
                 self.revord_df.at[index, 'CPN'] = matching_row['Customer Material Number']
+                # update leaf seller and modify the value of 'Seller H' column. It is like 'ABB_4051490_WF00::LEVEL3'. We need the string before '::'
+                self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
+                                
         # save result
         self.revord_df.to_excel('Rev activity/add_dn_infro.xlsx', index=False)
         print('DN information added!')
@@ -248,7 +254,45 @@ class operator(object):
         print('Proposed PGI added!')
     
     def arrange_stock(self):
-        pass
+        # Add new columns with default values
+        self.revord_df['Priority'] = 1
+        self.revord_df['sum of value'] = 0
+
+        # Set Priority and calculate 'sum of value'
+        for index, row in self.revord_df.iterrows():
+            matching_rows = self.customer_priority_df[
+                (self.customer_priority_df['Sales Product #'] == row['Material entered']) & 
+                (self.customer_priority_df['Leaf Seller'] == row['leaf seller'])
+            ]
+            if not matching_rows.empty:
+                priority = matching_rows.iloc[0]['Calculated JIRA Prio']
+                self.revord_df.at[index, 'Priority'] = priority
+            self.revord_df.at[index, 'sum of value'] = row['Priority'] * row['Net Value In EUR']
+
+        # Subgroup by 'Material entered' and 'Plant'
+        grouped = self.revord_df.groupby(['Material entered', 'Plant'])
+
+        for name, group in grouped:
+            # Sort the group by 'sum of value'
+            sorted_group = group.sort_values(by='sum of value', ascending=False)
+
+            # Initialize rest_stock
+            rest_stock = sorted_group.iloc[0]['Stock']
+
+            for index, row in sorted_group.iterrows():
+                if pd.notna(row['DDL block']) or row['Stock'] == 0 or row['Remark'] == "No potential":
+                    self.revord_df.at[index, 'Arrange stock'] = -1
+                else:
+                    if rest_stock > row['Open Quantity']:
+                        # Shipment can be made
+                        self.revord_df.at[index, 'Arrange stock'] = 1
+                        rest_stock -= row['Open Quantity']
+                    else:
+                        # Shipment cannot be made
+                        self.revord_df.at[index, 'Arrange stock'] = 0
+        # save the result
+        self.revord_df.to_excel('Rev activity/arrange_stock.xlsx', index=False)
+        print('Stock arranged!')
 
     def save(self):
         # Format dates in the DataFrame
@@ -294,8 +338,8 @@ if  __name__ == '__main__':
     # print("DN check completed!")
     # operator.add_stock()
     # print("Stock added!")
-    operator.cal_proposed_day()
-    print("Proposed PGI added!")
+    # operator.cal_proposed_day()
+    # print("Proposed PGI added!")
     operator.arrange_stock()
     print("Stock arranged!")
     operator.save()
