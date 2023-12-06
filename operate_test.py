@@ -6,7 +6,8 @@ import os
 from datetime import datetime, timedelta
 class operator(object):
     def __init__(self):
-        self.revord_path = 'Rev activity/ZSD_REVORD 20231115.XLSX'
+        # self.revord_path = 'Rev activity/ZSD_REVORD 20231115.XLSX'
+        self.revord_path = 'Rev activity/add_stock.xlsx'
         self.ship_to_path = 'Rev activity/DDue_List_ShipTo_Data 20231115.xls'
         self.sold_to_path = 'Rev activity/DDue_List_SoldTo_Data 20231115.xls'
         self.allocation_path = 'Rev activity/DDue_List_Allocation_Data 20231115.xls'
@@ -23,6 +24,7 @@ class operator(object):
         self.ship_to_df = pd.read_excel(self.ship_to_path)
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
+        self.stock_df = pd.read_excel(self.stock_path)
         
         self.last_working_day = ['2023-12-29']
         self.holiday = ['2023-12-25']
@@ -173,68 +175,130 @@ class operator(object):
         print('add stock completed!')
     
     def cal_proposed_day(self):
-        pass
+        def cal_date(self, date, dw):
+            # Convert the string date to a datetime object for comparison
+            start_date = datetime.strptime(date, '%Y-%m-%d').date()
+            # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
+            holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
+            days_to_subtract = dw
+            while days_to_subtract > 0:
+                start_date -= timedelta(days=1)
+                # Skip weekends and holidays
+                if start_date.weekday() >= 5 or start_date in holidays:
+                    continue
+                else:
+                    days_to_subtract -= 1
+            return start_date
+        
+        # Convert the string date to a datetime object for comparison
+        last_working_day = datetime.strptime(self.last_working_day[0], '%Y-%m-%d').date()
+        # Iterate through each row in revord_df
+        for index, row in self.revord_df.iterrows():
+            # Convert 'Goods Issue Date' to datetime.date for comparison
+            if pd.isnull(row['Goods Issue Date']):
+                continue  # or handle the missing value as needed
+            elif isinstance(row['Goods Issue Date'], pd.Timestamp):
+                goods_issue_date = row['Goods Issue Date'].date()
+            else:
+                # Convert 'Goods Issue Date' to datetime.date for comparison if it's a string
+                goods_issue_date = datetime.strptime(row['Goods Issue Date'], '%Y-%m-%d').date()
+            # convert 'Customer requested date' to datetime.date for comparison
+            if pd.isnull(row['Customer requested date']):
+                continue
+            elif isinstance(row['Customer requested date'], pd.Timestamp):
+                crd = row['Customer requested date'].date()
+            else:
+                crd = datetime.strptime(row['Customer requested date'], '%Y-%m-%d').date()
+            
+            # the EETT and ETT is like '1,00' and '2,00', convert it to int 1, 2...
+            if pd.isnull(row['Del Window Minus']):
+                dw = 0
+            else:
+                dw = int(row['Del Window Minus'])
+            if type(row['EETT']) == str:
+                eett = int(row['EETT'].split(',')[0])
+            if type(row['ETT']) == str:
+                ett = int(row['ETT'].split(',')[0])
+
+            # Check the conditions and update 'Remark' and 'Proposed PGI' accordingly
+            if goods_issue_date <= last_working_day:
+                self.revord_df.at[index, 'Remark'] = 'Open AT'
+                self.revord_df.at[index, 'Proposed PGI'] = goods_issue_date
+            else:
+                if cal_date(goods_issue_date, dw) <= last_working_day:
+                    if crd-ett-eett <= last_working_day:
+                        self.revord_df.at[index, 'Remark'] = 'Open AT'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(last_working_day, dw) # last_working_day - dw
+                    else:
+                        self.revord_df.at[index, 'Remark'] = 'DW potential'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(goods_issue_date, dw) # goods_issue_date - dw
+                else:
+                    if crd - ett - eett <= last_working_day:
+                        self.revord_df.at[index, 'Remark'] = 'Due CRD with late GI'
+                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                    else:
+                        if cal_date(date=crd, dw=ett+eett) <= last_working_day:
+                            self.revord_df.at[index, 'Remark'] = 'CRD potential with late GI'
+                            self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                        else:
+                            self.revord_df.at[index, 'Remark'] = 'No potential'
+                            self.revord_df.at[index, 'Proposed PGI'] = None
+        # save the result
+        self.revord_df.to_excel('Rev activity/cal_proposed_day.xlsx', index=False)
+        print('Proposed PGI added!')
     
     def arrange_stock(self):
         pass
 
     def save(self):
-        # modify the self.revord_df the format of 'Customer requested date' and 'Goods Issue Date' and 'Delivery Date' to yyyy/mm/dd
+        # Format dates in the DataFrame
         self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
         self.revord_df['Goods Issue Date'] = self.revord_df['Goods Issue Date'].dt.strftime('%Y/%m/%d')
         self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
-        # write the self.revord_df to excel by specific path and format
-        # create a new excel file
-        wb = Workbook()
-        # create a new sheet
-        ws = wb.active
-        # set the sheet name
-        ws.title = 'RevOrd'
-        # set the font
-        font = Font(name='Arial', size=10)
-        # set the writer
-        writer = pd.ExcelWriter(os.path.join(self.save_path, 'infineon revenue'), engine='openpyxl')
-        writer.book = wb
-        # write the self.revord_df to excel
-        self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
-        # set the column width
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter
-            for cell in col:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            adjusted_width = (max_length + 2) * 1.2
-            ws.column_dimensions[column].width = adjusted_width
-            
-        # set the header style grey and center and bold
-        for cell in ws[1]:
-            cell.fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.font = Font(bold=True)
-            
-        # save the excel file
-        writer.save()
-        # close the excel file
-        writer.close()
+
+        # Define the Excel file path
+        file_path = os.path.join(self.save_path, 'infineon revenue.xlsx')
+
+        # Use a context manager to handle the ExcelWriter
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            # Write the DataFrame to an Excel file
+            self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
+
+            # Access the workbook and sheet for formatting
+            workbook = writer.book
+            worksheet = writer.sheets['RevOrd']
+
+            # Set the column width
+            for col in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in col)
+                adjusted_width = (max_length + 2) * 1.2
+                worksheet.column_dimensions[col[0].column_letter].width = adjusted_width
+
+            # Set header style
+            for cell in worksheet[1]:
+                cell.fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.font = Font(bold=True)
     
 if  __name__ == '__main__':
     operator = operator()
-    operator.sold_to_check()
-    print("Sold-to check completed!")
-    operator.ship_to_check()
-    print("Ship-to check completed!")
-    operator.allocation_check()
-    print("Allocation check completed!")
-    operator.add_dn_infro()
-    print("DN information added!")
-    operator.dn_check()
-    print("DN check completed!")
-    # print(operator.repair_zm())
-    # print("ZM repaired!")
-    operator.add_stock()
-    print("Stock added!")
-    
-    
+    # operator.sold_to_check()
+    # print("Sold-to check completed!")
+    # operator.ship_to_check()
+    # print("Ship-to check completed!")
+    # operator.allocation_check()
+    # print("Allocation check completed!")
+    # operator.add_dn_infro()
+    # print("DN information added!")
+    # operator.dn_check()
+    # print("DN check completed!")
+    # operator.add_stock()
+    # print("Stock added!")
+    operator.cal_proposed_day()
+    print("Proposed PGI added!")
+    operator.arrange_stock()
+    print("Stock arranged!")
+    operator.save()
+    print("Report saved!")
     print("Report generated successfully!")
         

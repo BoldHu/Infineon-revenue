@@ -58,8 +58,6 @@ class GUI:
         print("DN information added!")
         self.operator.dn_check()
         print("DN check completed!")
-        # self.operator.repair_zm()
-        # print("ZM repaired!")
         self.operator.add_stock()
         print("Stock added!")
         self.operator.add_proposed_pgi()

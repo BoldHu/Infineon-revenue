@@ -28,6 +28,7 @@ class operator(object):
         self.ship_to_df = pd.read_excel(self.ship_to_path)
         self.allocation_df = pd.read_excel(self.allocation_path)
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
+        self.stock_df = pd.read_excel(self.stock_path)
     
     def sold_to_check(self):
         # Convert 'Sold To No.' column in revord_df to string and remove leading zeros
@@ -175,12 +176,30 @@ class operator(object):
         # Iterate through each row in revord_df
         for index, row in self.revord_df.iterrows():
             # Convert 'Goods Issue Date' to datetime.date for comparison
-            goods_issue_date = datetime.strptime(row['Goods Issue Date'], '%Y-%m-%d').date()
-            dw = int(row['Del Windows Minus'])
-            crd = datetime.strptime(row['Customer requested date'], '%Y-%m-%d').date()
+            if pd.isnull(row['Goods Issue Date']):
+                continue  # or handle the missing value as needed
+            elif isinstance(row['Goods Issue Date'], pd.Timestamp):
+                goods_issue_date = row['Goods Issue Date'].date()
+            else:
+                # Convert 'Goods Issue Date' to datetime.date for comparison if it's a string
+                goods_issue_date = datetime.strptime(row['Goods Issue Date'], '%Y-%m-%d').date()
+            # convert 'Customer requested date' to datetime.date for comparison
+            if pd.isnull(row['Customer requested date']):
+                continue
+            elif isinstance(row['Customer requested date'], pd.Timestamp):
+                crd = row['Customer requested date'].date()
+            else:
+                crd = datetime.strptime(row['Customer requested date'], '%Y-%m-%d').date()
+            
             # the EETT and ETT is like '1,00' and '2,00', convert it to int 1, 2...
-            eett = int(row['EETT'].split(',')[0])
-            ett = int(row['ETT'].split(',')[0])
+            if pd.isnull(row['Del Window Minus']):
+                dw = 0
+            else:
+                dw = int(row['Del Window Minus'])
+            if type(row['EETT']) == str:
+                eett = int(row['EETT'].split(',')[0])
+            if type(row['ETT']) == str:
+                ett = int(row['ETT'].split(',')[0])
 
             # Check the conditions and update 'Remark' and 'Proposed PGI' accordingly
             if goods_issue_date <= last_working_day:
@@ -210,41 +229,31 @@ class operator(object):
         pass
 
     def save(self):
-        # modify the self.revord_df the format of 'Customer requested date' and 'Goods Issue Date' and 'Delivery Date' to yyyy/mm/dd
+        # Format dates in the DataFrame
         self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
         self.revord_df['Goods Issue Date'] = self.revord_df['Goods Issue Date'].dt.strftime('%Y/%m/%d')
         self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
-        # write the self.revord_df to excel by specific path and format
-        # create a new excel file
-        wb = Workbook()
-        # create a new sheet
-        ws = wb.active
-        # set the sheet name
-        ws.title = 'RevOrd'
-        # set the font
-        font = Font(name='Arial', size=10)
-        # set the writer
-        writer = pd.ExcelWriter(os.path.join(self.save_path, 'infineon revenue'), engine='openpyxl')
-        writer.book = wb
-        # write the self.revord_df to excel
-        self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
-        # set the column width
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter
-            for cell in col:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            adjusted_width = (max_length + 2) * 1.2
-            ws.column_dimensions[column].width = adjusted_width
-            
-        # set the header style grey and center and bold
-        for cell in ws[1]:
-            cell.fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.font = Font(bold=True)
-            
-        # save the excel file
-        writer.save()
-        # close the excel file
-        writer.close()
+
+        # Define the Excel file path
+        file_path = os.path.join(self.save_path, 'infineon revenue.xlsx')
+
+        # Use a context manager to handle the ExcelWriter
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            # Write the DataFrame to an Excel file
+            self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
+
+            # Access the workbook and sheet for formatting
+            workbook = writer.book
+            worksheet = writer.sheets['RevOrd']
+
+            # Set the column width
+            for col in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in col)
+                adjusted_width = (max_length + 2) * 1.2
+                worksheet.column_dimensions[col[0].column_letter].width = adjusted_width
+
+            # Set header style
+            for cell in worksheet[1]:
+                cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.font = Font(bold=True)
