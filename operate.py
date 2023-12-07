@@ -41,7 +41,7 @@ class operator(object):
         self.revord_df['CPN'] = ''
         self.revord_df['EETT'] = 0
         self.revord_df['ETT'] = 0
-        self.revord_df['DDL block'] = ''
+        self.revord_df['DDL block'] = None
         self.revord_df['Stock'] = 0
         self.revord_df['Proposed PGI'] = ''
         self.revord_df['Remark'] = ''

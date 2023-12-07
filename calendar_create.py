@@ -81,7 +81,7 @@ class CalendarApp:
         self.selection_mode = mode
 
     def select_date(self, year, month, day):
-        selected_date = f"{day}-{month}-{year}"
+        selected_date = f"{year}-{month}-{day}"
 
         if self.selection_mode == "LWD":
             self.selected_last_working_day.append(selected_date)
