@@ -159,23 +159,28 @@ class operator(object):
 
                 # Update 'Stock' in revord_df with 'Sum of stock' from stock_df
                 self.revord_df.at[index, 'Stock'] = matching_row['FREEQTY']
+                
+    def cal_date(self, date, dw):
+        # Convert the string date to a datetime object for comparison
+        if isinstance(date, pd.Timestamp):
+            start_date = date.date()
+        elif isinstance(date, str):
+            start_date = datetime.strptime(date, '%Y-%m-%d').date()
+        else:
+            start_date = date
+        # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
+        holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
+        days_to_subtract = dw
+        while days_to_subtract > 0:
+            start_date -= timedelta(days=1)
+            # Skip weekends and holidays
+            if start_date.weekday() >= 5 or start_date in holidays:
+                continue
+            else:
+                days_to_subtract -= 1
+        return start_date
     
     def cal_proposed_day(self):
-        def cal_date(self, date, dw):
-            # Convert the string date to a datetime object for comparison
-            start_date = datetime.strptime(date, '%Y-%m-%d').date()
-            # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
-            holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
-            days_to_subtract = dw
-            while days_to_subtract > 0:
-                start_date -= timedelta(days=1)
-                # Skip weekends and holidays
-                if start_date.weekday() >= 5 or start_date in holidays:
-                    continue
-                else:
-                    days_to_subtract -= 1
-            return start_date
-        
         # Convert the string date to a datetime object for comparison
         last_working_day = datetime.strptime(self.last_working_day[0], '%Y-%m-%d').date()
         # Iterate through each row in revord_df
@@ -203,39 +208,43 @@ class operator(object):
                 dw = int(row['Del Window Minus'])
             if type(row['EETT']) == str:
                 eett = int(row['EETT'].split(',')[0])
+            else:
+                eett = 0
             if type(row['ETT']) == str:
                 ett = int(row['ETT'].split(',')[0])
+            else:
+                ett = 0
 
             # Check the conditions and update 'Remark' and 'Proposed PGI' accordingly
             if goods_issue_date <= last_working_day:
                 self.revord_df.at[index, 'Remark'] = 'Open AT'
                 self.revord_df.at[index, 'Proposed PGI'] = goods_issue_date
             else:
-                if cal_date(goods_issue_date, dw) <= last_working_day:
-                    if crd-ett-eett <= last_working_day:
+                if self.cal_date(goods_issue_date, dw) <= last_working_day:
+                    if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                         self.revord_df.at[index, 'Remark'] = 'Open AT'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(last_working_day, dw) # last_working_day - dw
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(last_working_day, dw) # last_working_day - dw
                     else:
                         self.revord_df.at[index, 'Remark'] = 'DW potential'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(goods_issue_date, dw) # goods_issue_date - dw
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(goods_issue_date, dw) # goods_issue_date - dw
                 else:
-                    if crd - ett - eett <= last_working_day:
+                    if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                         self.revord_df.at[index, 'Remark'] = 'Due CRD with late GI'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
                     else:
-                        if cal_date(date=crd, dw=ett+eett) <= last_working_day:
+                        if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                             self.revord_df.at[index, 'Remark'] = 'CRD potential with late GI'
-                            self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                            self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
                         else:
                             self.revord_df.at[index, 'Remark'] = 'No potential'
                             self.revord_df.at[index, 'Proposed PGI'] = None
     
     def arrange_stock(self):
-        # Add new columns with default values
+        # 添加默认值为0的新列
         self.revord_df['Priority'] = 1
         self.revord_df['sum of value'] = 0
 
-        # Set Priority and calculate 'sum of value'
+        # 设置优先级并计算'sum of value'
         for index, row in self.revord_df.iterrows():
             matching_rows = self.customer_priority_df[
                 (self.customer_priority_df['Sales Product #'] == row['Material entered']) & 
@@ -244,16 +253,26 @@ class operator(object):
             if not matching_rows.empty:
                 priority = matching_rows.iloc[0]['Calculated JIRA Prio']
                 self.revord_df.at[index, 'Priority'] = priority
-            self.revord_df.at[index, 'sum of value'] = row['Priority']* row['Net Value In EUR']
+            self.revord_df.at[index, 'sum of value'] = row['Priority'] * row['Net Value In EUR']
 
-        # Subgroup by 'Material entered' and 'Plant'
+        # 定义'Remark'的自定义排序函数
+        def remark_sorter(remark):
+            priorities = {
+                'Open AT': 1,
+                'DW potential': 2,
+                'Due CRD with late GI': 3,
+                'CRD potential with late GI': 4
+            }
+            return priorities.get(remark, 5)  # 其他备注的默认优先级
+
+        # 按'Material entered'和'Plant'对数据进行分组
         grouped = self.revord_df.groupby(['Material entered', 'Plant'])
 
         for name, group in grouped:
-            # Sort the group by 'sum of value'
-            sorted_group = group.sort_values(by='sum of value', ascending=False)
+            # 首先按'Remark'优先级排序，然后按'sum of value'排序
+            sorted_group = group.sort_values(by=['Remark', 'sum of value'], key=lambda x: x.map(remark_sorter) if x.name == 'Remark' else x, ascending=[True, False])
 
-            # Initialize rest_stock
+            # 初始化rest_stock
             rest_stock = sorted_group.iloc[0]['Stock']
 
             for index, row in sorted_group.iterrows():
@@ -261,11 +280,11 @@ class operator(object):
                     self.revord_df.at[index, 'Arrange stock'] = -1
                 else:
                     if rest_stock > row['Open Quantity']:
-                        # Shipment can be made
+                        # 可以出货
                         self.revord_df.at[index, 'Arrange stock'] = 1
                         rest_stock -= row['Open Quantity']
                     else:
-                        # Shipment cannot be made
+                        # 不能出货
                         self.revord_df.at[index, 'Arrange stock'] = 0
 
 
@@ -284,7 +303,6 @@ class operator(object):
             self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
 
             # Access the workbook and sheet for formatting
-            workbook = writer.book
             worksheet = writer.sheets['RevOrd']
 
             # Set the column width
