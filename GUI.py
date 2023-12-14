@@ -19,10 +19,11 @@ class GUI:
         self.dn_path = tk.StringVar(value="")
         self.stock_path = tk.StringVar(value="")
         self.customer_priority_path = tk.StringVar(value="")
+        self.exception_path = tk.StringVar(value="")
         self.save_path = tk.StringVar(value="")
 
         # Maintain a list of file paths for easy access
-        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.stock_path, self.customer_priority_path]
+        self.file_paths = [self.revord_path, self.ship_to_path, self.sold_to_path, self.allocation_path, self.dn_path, self.stock_path, self.customer_priority_path, self.exception_path, self.save_path]
         self.calendar = CalendarApp(self.root)
         
     def run(self):
@@ -59,6 +60,9 @@ class GUI:
         print("DN information added!")
         self.operator.dn_check()
         print("DN check completed!")
+        if self.exception_path.get() != "":
+            self.operator.exception_check()
+            print("Exception check completed!")
         self.operator.add_stock()
         print("Stock added!")
         self.operator.cal_proposed_day()
@@ -131,6 +135,13 @@ class GUI:
         self.customer_priority_upload_button = tk.Button(self.root, text="Upload Customer Priority Excel", command=upload_customer_priority)
         self.customer_priority_upload_button.grid(row=2, column=2, padx=(5, 10), pady=(40, 10))
         self.customer_priority_path_label.grid(row=2, column=3, padx=(5, 10), pady=(40, 10))
+        
+        # eighth is exception excel
+        self.exception_path_label = tk.Label(self.root, textvariable=self.exception_path)
+        upload_exception = lambda: self.upload_file(self.exception_path, self.exception_path_label)
+        self.exception_upload_button = tk.Button(self.root, text="Upload Exception Excel", command=upload_exception)
+        self.exception_upload_button.grid(row=3, column=2, padx=(5, 10), pady=(40, 10))
+        self.exception_path_label.grid(row=3, column=3, padx=(5, 10), pady=(40, 10))
 
         # Create Confirm, save and Clear buttons
         self.confirm_button = tk.Button(self.root, text="Confirm", command=self.confirm_action)

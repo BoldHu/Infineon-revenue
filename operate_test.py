@@ -6,8 +6,8 @@ import os
 from datetime import datetime, timedelta
 class operator(object):
     def __init__(self):
-        # self.revord_path = 'Rev activity/ZSD_REVORD 20231115.XLSX'
-        self.revord_path = 'Rev activity/add_stock.xlsx'
+        self.revord_path = 'Rev activity/ZSD_REVORD 20231115.XLSX'
+        # self.revord_path = 'Rev activity/add_stock.xlsx'
         self.ship_to_path = 'Rev activity/DDue_List_ShipTo_Data 20231115.xls'
         self.sold_to_path = 'Rev activity/DDue_List_SoldTo_Data 20231115.xls'
         self.allocation_path = 'Rev activity/DDue_List_Allocation_Data 20231115.xls'
@@ -15,6 +15,7 @@ class operator(object):
         self.stock_path = 'Rev activity/Stock via SQ01.XLSX'
         self.save_path = 'Rev activity/'
         self.customer_priority_path = 'Rev activity/RPA_WeekDayAllocBot_Prio_List_Global - priority.xlsx'
+        self.exception_path = 'Rev activity/exception.xlsx'
         
         # this excel file is '.xlsx' format, so we can use pandas to read it directly
         self.revord_df = pd.read_excel(self.revord_path)
@@ -27,6 +28,7 @@ class operator(object):
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         self.stock_df = pd.read_excel(self.stock_path)
         self.customer_priority_df = pd.read_excel(self.customer_priority_path)
+        self.exception_df = pd.read_excel(self.exception_path)
         
         self.last_working_day = ['2023-12-29']
         self.holiday = ['2023-12-25']
@@ -40,12 +42,15 @@ class operator(object):
         self.revord_df['CPN'] = ''
         self.revord_df['EETT'] = 0
         self.revord_df['ETT'] = 0
-        self.revord_df['DDL block'] = ''
+        self.revord_df['DDL block'] = None
         self.revord_df['Stock'] = 0
         self.revord_df['Proposed PGI'] = ''
         self.revord_df['Remark'] = ''
         self.revord_df['leaf seller'] = ''
         self.revord_df['Arrange stock'] = ''
+        
+        # add a new column 'Plant2' and fill it with the value of 'Plant' removing the number
+        self.revord_df['Plant2'] = self.revord_df['Plant'].str.replace(r'\d+', '', regex=True)
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
         self.sold_to_df['SoldTo'] = self.sold_to_df['SoldTo'].astype(str)
@@ -56,10 +61,8 @@ class operator(object):
             if row['Sold To No.'] in self.sold_to_df['SoldTo'].values:
                 # Update 'DDL block' column
                 self.revord_df.at[index, 'DDL block'] = 'sold to block'
-
-        # save the result to excel
+        # save the revord_df to excel
         self.revord_df.to_excel('Rev activity/sold_to_check.xlsx', index=False)
-        print("Sold-to check completed!")
     
     def ship_to_check(self):
         # Convert 'Ship To No.' column in revord_df to string and remove leading zeros
@@ -79,9 +82,8 @@ class operator(object):
                 else:
                     # Update 'DDL block' column with new comment
                     self.revord_df.at[index, 'DDL block'] = 'ship to block'
-        # save the result to excel
+        # save the ship_to_check to excel
         self.revord_df.to_excel('Rev activity/ship_to_check.xlsx', index=False)
-        print("Ship-to check completed!")
     
     def allocation_check(self):
         # Iterate through each row in revord_df
@@ -98,11 +100,9 @@ class operator(object):
                 else:
                     # Update 'DDL block' column with new comment
                     self.revord_df.at[index, 'DDL block'] = comment_to_add
-                    
-        # save the result to excel
+        # save the allocation_check to excel
         self.revord_df.to_excel('Rev activity/allocation_check.xlsx', index=False)
-        print("Allocation check completed!")
-        
+    
     def add_dn_infro(self):
         # Iterate through each row in revord_df
         for index, revord_row in self.revord_df.iterrows():
@@ -126,11 +126,20 @@ class operator(object):
                     self.revord_df.at[index, 'ETT'] = matching_row['ETT']
                 self.revord_df.at[index, 'CPN'] = matching_row['Customer Material Number']
                 # update leaf seller and modify the value of 'Seller H' column. It is like 'ABB_4051490_WF00::LEVEL3'. We need the string before '::'
-                self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
-                                
-        # save result
+                if pd.notna(matching_row['Seller H']):
+                    self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
+                else:
+                    self.revord_df.at[index, 'leaf seller'] = ''
+        # convert 'EETT' and 'ETT' to int type, they are like 1,00. We need the int 1
+        for index, row in self.revord_df.iterrows():
+            if type(row['EETT']) == str:
+                self.revord_df.at[index, 'EETT'] = int(row['EETT'].split(',')[0])
+            if type(row['ETT']) == str:
+                self.revord_df.at[index, 'ETT'] = int(row['ETT'].split(',')[0])
+        # add a new column 'transit' wihch is the result of 'EETT' + 'ETT'
+        self.revord_df['Transit'] = self.revord_df['EETT'] + self.revord_df['ETT']
+        # save the add_dn_infro to excel
         self.revord_df.to_excel('Rev activity/add_dn_infro.xlsx', index=False)
-        print('DN information added!')
     
     def dn_check(self):
         # Iterate through each row in revord_df
@@ -140,10 +149,12 @@ class operator(object):
 
             # Get the first and second column names of CPN_df
             first_column = self.CPN_df.columns[0]
+            # the second column removed the number
+            self.CPN_df[self.CPN_df.columns[1]] = self.CPN_df[self.CPN_df.columns[1]].str.replace(r'\d+', '', regex=True)
             second_column = self.CPN_df.columns[1]
 
             # Check if there is a matching row in self.CPN_df
-            if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant'])):
+            if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant2'])):
                 # Check if 'DDL block' column already has a value
                 if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
                     # Concatenate new comment with existing comment
@@ -151,10 +162,54 @@ class operator(object):
                 else:
                     # Update 'DDL block' column with new comment
                     self.revord_df.at[index, 'DDL block'] = comment_to_add
-        # save the result
-        self.revord_df.to_excel('Rev activity/dn_check.xlsx')
-        print('dn check')
+        # save the dn_check to excel
+        self.revord_df.to_excel('Rev activity/dn_check.xlsx', index=False)
     
+    def exception_check(self):
+        comment_to_add = 'exception handling'
+        # Iterate through each row in revord_df
+        print(self.exception_df.columns)
+        for index, row in self.revord_df.iterrows():
+            # Check if there is a matching row in exception_df with the column 'sold-to', 'ship-to', 'MC', 'CPN', 'SP'
+            # the corresponding coulumn in revord_df is 'Sold To No.', 'Ship To No.', 'Main Customer', 'CPN', 'Material entered'
+            # if the row has one value in the column, it will add the comment to the 'DDL block' column
+            # only check the not nan value in exception_df
+            if pd.notna(row['Sold To No.']) and any(self.exception_df['sold-to'] == row['Sold To No.']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Ship To No.']) and any(self.exception_df['ship-to'] == row['Ship To No.']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Main Customer']) and any(self.exception_df['MC'] == row['Main Customer']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['CPN']) and any(self.exception_df['CPN'] == row['CPN']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Material entered']) and any(self.exception_df['SP'] == row['Material entered']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+        # save the exception_check to excel
+        self.revord_df.to_excel('Rev activity/exception_check.xlsx', index=False)
+                
     def add_stock(self):
         # Ensure that 'Stock' column exists in revord_df
         if 'Stock' not in self.revord_df.columns:
@@ -164,7 +219,6 @@ class operator(object):
         for index, revord_row in self.revord_df.iterrows():
             # Find matching rows in stock_df
             matching_rows = self.stock_df[
-                (self.stock_df['SP'] == revord_row['Material entered']) &
                 (self.stock_df['Plnt'] == revord_row['Plant']) &
                 (self.stock_df['Material'] == revord_row['Material'])
             ]
@@ -176,26 +230,30 @@ class operator(object):
 
                 # Update 'Stock' in revord_df with 'Sum of stock' from stock_df
                 self.revord_df.at[index, 'Stock'] = matching_row['FREEQTY']
-        # save the result
+        # save the add_stock to excel
         self.revord_df.to_excel('Rev activity/add_stock.xlsx', index=False)
-        print('add stock completed!')
+                
+    def cal_date(self, date, dw):
+        # Convert the string date to a datetime object for comparison
+        if isinstance(date, pd.Timestamp):
+            start_date = date.date()
+        elif isinstance(date, str):
+            start_date = datetime.strptime(date, '%Y-%m-%d').date()
+        else:
+            start_date = date
+        # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
+        holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
+        days_to_subtract = dw
+        while days_to_subtract > 0:
+            start_date -= timedelta(days=1)
+            # Skip weekends and holidays
+            if start_date.weekday() >= 5 or start_date in holidays:
+                continue
+            else:
+                days_to_subtract -= 1
+        return start_date
     
     def cal_proposed_day(self):
-        def cal_date(self, date, dw):
-            # Convert the string date to a datetime object for comparison
-            start_date = datetime.strptime(date, '%Y-%m-%d').date()
-            # Assuming self.holiday is a list of holidays in 'YYYY-MM-DD' format
-            holidays = [datetime.strptime(day, '%Y-%m-%d').date() for day in self.holiday]
-            days_to_subtract = dw
-            while days_to_subtract > 0:
-                start_date -= timedelta(days=1)
-                # Skip weekends and holidays
-                if start_date.weekday() >= 5 or start_date in holidays:
-                    continue
-                else:
-                    days_to_subtract -= 1
-            return start_date
-        
         # Convert the string date to a datetime object for comparison
         last_working_day = datetime.strptime(self.last_working_day[0], '%Y-%m-%d').date()
         # Iterate through each row in revord_df
@@ -223,42 +281,49 @@ class operator(object):
                 dw = int(row['Del Window Minus'])
             if type(row['EETT']) == str:
                 eett = int(row['EETT'].split(',')[0])
+            elif type(row['EETT']) == int:
+                pass
+            else:
+                eett = 0
             if type(row['ETT']) == str:
                 ett = int(row['ETT'].split(',')[0])
+            elif type(row['ETT']) == int:
+                pass
+            else:
+                ett = 0
 
             # Check the conditions and update 'Remark' and 'Proposed PGI' accordingly
             if goods_issue_date <= last_working_day:
                 self.revord_df.at[index, 'Remark'] = 'Open AT'
                 self.revord_df.at[index, 'Proposed PGI'] = goods_issue_date
             else:
-                if cal_date(goods_issue_date, dw) <= last_working_day:
-                    if crd-ett-eett <= last_working_day:
+                if self.cal_date(goods_issue_date, dw) <= last_working_day:
+                    if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                         self.revord_df.at[index, 'Remark'] = 'Open AT'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(last_working_day, dw) # last_working_day - dw
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(goods_issue_date, dw) # last_working_day - dw
                     else:
                         self.revord_df.at[index, 'Remark'] = 'DW potential'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(goods_issue_date, dw) # goods_issue_date - dw
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(goods_issue_date, dw) # goods_issue_date - dw
                 else:
-                    if crd - ett - eett <= last_working_day:
+                    if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                         self.revord_df.at[index, 'Remark'] = 'Due CRD with late GI'
-                        self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
                     else:
-                        if cal_date(date=crd, dw=ett+eett) <= last_working_day:
+                        if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                             self.revord_df.at[index, 'Remark'] = 'CRD potential with late GI'
-                            self.revord_df.at[index, 'Proposed PGI'] = cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                            self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
                         else:
                             self.revord_df.at[index, 'Remark'] = 'No potential'
                             self.revord_df.at[index, 'Proposed PGI'] = None
-        # save the result
+        # save the cal_proposed_day to excel
         self.revord_df.to_excel('Rev activity/cal_proposed_day.xlsx', index=False)
-        print('Proposed PGI added!')
     
     def arrange_stock(self):
-        # Add new columns with default values
+        # 添加默认值为0的新列
         self.revord_df['Priority'] = 1
         self.revord_df['sum of value'] = 0
 
-        # Set Priority and calculate 'sum of value'
+        # 设置优先级并计算'sum of value'
         for index, row in self.revord_df.iterrows():
             matching_rows = self.customer_priority_df[
                 (self.customer_priority_df['Sales Product #'] == row['Material entered']) & 
@@ -269,14 +334,24 @@ class operator(object):
                 self.revord_df.at[index, 'Priority'] = priority
             self.revord_df.at[index, 'sum of value'] = row['Priority'] * row['Net Value In EUR']
 
-        # Subgroup by 'Material entered' and 'Plant'
+        # 定义'Remark'的自定义排序函数
+        def remark_sorter(remark):
+            priorities = {
+                'Open AT': 1,
+                'DW potential': 2,
+                'Due CRD with late GI': 3,
+                'CRD potential with late GI': 4
+            }
+            return priorities.get(remark, 5)  # 其他备注的默认优先级
+
+        # 按'Material entered'和'Plant'对数据进行分组
         grouped = self.revord_df.groupby(['Material entered', 'Plant'])
 
         for name, group in grouped:
-            # Sort the group by 'sum of value'
-            sorted_group = group.sort_values(by='sum of value', ascending=False)
+            # 首先按'Remark'优先级排序，然后按'sum of value'排序
+            sorted_group = group.sort_values(by=['Remark', 'sum of value'], key=lambda x: x.map(remark_sorter) if x.name == 'Remark' else x, ascending=[True, False])
 
-            # Initialize rest_stock
+            # 初始化rest_stock
             rest_stock = sorted_group.iloc[0]['Stock']
 
             for index, row in sorted_group.iterrows():
@@ -284,15 +359,14 @@ class operator(object):
                     self.revord_df.at[index, 'Arrange stock'] = -1
                 else:
                     if rest_stock > row['Open Quantity']:
-                        # Shipment can be made
+                        # 可以出货
                         self.revord_df.at[index, 'Arrange stock'] = 1
                         rest_stock -= row['Open Quantity']
                     else:
-                        # Shipment cannot be made
+                        # 不能出货
                         self.revord_df.at[index, 'Arrange stock'] = 0
-        # save the result
+        # save the arrange_stock to excel
         self.revord_df.to_excel('Rev activity/arrange_stock.xlsx', index=False)
-        print('Stock arranged!')
 
     def save(self):
         # Format dates in the DataFrame
@@ -301,7 +375,7 @@ class operator(object):
         self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
 
         # Define the Excel file path
-        file_path = os.path.join(self.save_path, 'infineon revenue.xlsx')
+        file_path = os.path.join(self.save_path, 'original result.xlsx')
 
         # Use a context manager to handle the ExcelWriter
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
@@ -309,7 +383,6 @@ class operator(object):
             self.revord_df.to_excel(writer, sheet_name='RevOrd', index=False)
 
             # Access the workbook and sheet for formatting
-            workbook = writer.book
             worksheet = writer.sheets['RevOrd']
 
             # Set the column width
@@ -323,23 +396,52 @@ class operator(object):
                 cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
                 cell.alignment = Alignment(horizontal='center', vertical='center')
                 cell.font = Font(bold=True)
+        
+        # find the 'arrange stock' == 1
+        self.df = self.revord_df[self.revord_df['Arrange stock'] == 1]
+        # only save the columns we need
+        columns = ['Sales Office', 'Description', 'Sold To No.', 'Ship To No.', 'Sales Document Type', 'CPN', 'leaf seller', 'Material entered', 'Material', 'shipping point', 'Sales Document', 'Sales Document Item', 'Open Quantity', 'Customer requested date', 'Transit', 'Allocation policy', 'Open Quantity', 'Proposed PGI']
+        df_template = self.df[columns]
+        # write the template to excel
+        file_path_template = os.path.join(self.save_path, 'infineon revenue result.xlsx')
+                # Use a context manager to handle the ExcelWriter
+        with pd.ExcelWriter(file_path_template, engine='openpyxl') as writer:
+            # Write the DataFrame to an Excel file
+            df_template.to_excel(writer, sheet_name='RevOrd', index=False)
+
+            # Access the workbook and sheet for formatting
+            worksheet = writer.sheets['RevOrd']
+
+            # Set the column width with every column width
+            for col in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in col)
+                adjusted_width = (max_length + 2) * 1.2
+                worksheet.column_dimensions[col[0].column_letter].width = adjusted_width
+
+            # Set header style
+            for cell in worksheet[1]:
+                cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.font = Font(bold=True)
     
 if  __name__ == '__main__':
     operator = operator()
-    # operator.sold_to_check()
-    # print("Sold-to check completed!")
-    # operator.ship_to_check()
-    # print("Ship-to check completed!")
-    # operator.allocation_check()
-    # print("Allocation check completed!")
-    # operator.add_dn_infro()
-    # print("DN information added!")
-    # operator.dn_check()
-    # print("DN check completed!")
-    # operator.add_stock()
-    # print("Stock added!")
-    # operator.cal_proposed_day()
-    # print("Proposed PGI added!")
+    operator.sold_to_check()
+    print("Sold-to check completed!")
+    operator.ship_to_check()
+    print("Ship-to check completed!")
+    operator.allocation_check()
+    print("Allocation check completed!")
+    operator.add_dn_infro()
+    print("DN information added!")
+    operator.dn_check()
+    print("DN check completed!")
+    operator.exception_check()
+    print("Exception check completed!")
+    operator.add_stock()
+    print("Stock added!")
+    operator.cal_proposed_day()
+    print("Proposed PGI added!")
     operator.arrange_stock()
     print("Stock arranged!")
     operator.save()

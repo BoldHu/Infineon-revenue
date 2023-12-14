@@ -14,6 +14,7 @@ class operator(object):
         self.dn_path = GUI.dn_path.get()
         self.stock_path = GUI.stock_path.get()
         self.customer_priority_path = GUI.customer_priority_path.get()
+        self.exception_path = GUI.exception_path.get()
         self.save_path = GUI.save_path.get()
         
         # memory the last working day and holiday
@@ -31,6 +32,7 @@ class operator(object):
         self.CPN_df = pd.read_excel(self.allocation_path, sheet_name=1)
         self.stock_df = pd.read_excel(self.stock_path)
         self.customer_priority_df = pd.read_excel(self.customer_priority_path)
+        self.exception_df = pd.read_excel(self.exception_path)
     
     def sold_to_check(self):
         # Convert 'Sold To No.' column in revord_df to string and remove leading zeros
@@ -47,6 +49,9 @@ class operator(object):
         self.revord_df['Remark'] = ''
         self.revord_df['leaf seller'] = ''
         self.revord_df['Arrange stock'] = ''
+        
+        # add a new column 'Plant2' and fill it with the value of 'Plant' removing the number
+        self.revord_df['Plant2'] = self.revord_df['Plant'].str.replace(r'\d+', '', regex=True)
 
         # Convert 'SoldTo' column in sold_to_df to string for consistent comparison
         self.sold_to_df['SoldTo'] = self.sold_to_df['SoldTo'].astype(str)
@@ -116,7 +121,18 @@ class operator(object):
                     self.revord_df.at[index, 'ETT'] = matching_row['ETT']
                 self.revord_df.at[index, 'CPN'] = matching_row['Customer Material Number']
                 # update leaf seller and modify the value of 'Seller H' column. It is like 'ABB_4051490_WF00::LEVEL3'. We need the string before '::'
-                self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
+                if pd.notna(matching_row['Seller H']):
+                    self.revord_df.at[index, 'leaf seller'] = matching_row['Seller H'].split('::')[0]
+                else:
+                    self.revord_df.at[index, 'leaf seller'] = ''
+        # convert 'EETT' and 'ETT' to int type, they are like 1,00. We need the int 1
+        for index, row in self.revord_df.iterrows():
+            if type(row['EETT']) == str:
+                self.revord_df.at[index, 'EETT'] = int(row['EETT'].split(',')[0])
+            if type(row['ETT']) == str:
+                self.revord_df.at[index, 'ETT'] = int(row['ETT'].split(',')[0])
+        # add a new column 'transit' wihch is the result of 'EETT' + 'ETT'
+        self.revord_df['Transit'] = self.revord_df['EETT'] + self.revord_df['ETT']
     
     def dn_check(self):
         # Iterate through each row in revord_df
@@ -126,10 +142,13 @@ class operator(object):
 
             # Get the first and second column names of CPN_df
             first_column = self.CPN_df.columns[0]
+            # the second column removed the number
+            self.CPN_df[self.CPN_df.columns[1]] = self.CPN_df[self.CPN_df.columns[1]].str.replace(r'\d+', '', regex=True)
+
             second_column = self.CPN_df.columns[1]
 
             # Check if there is a matching row in self.CPN_df
-            if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant'])):
+            if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant2'])):
                 # Check if 'DDL block' column already has a value
                 if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
                     # Concatenate new comment with existing comment
@@ -138,6 +157,48 @@ class operator(object):
                     # Update 'DDL block' column with new comment
                     self.revord_df.at[index, 'DDL block'] = comment_to_add
     
+    def exception_check(self):
+        comment_to_add = 'exception handling'
+        # Iterate through each row in revord_df
+        for index, row in self.revord_df.iterrows():
+            # Check if there is a matching row in exception_df with the column 'sold-to', 'ship-to', 'MC', 'CPN', 'SP'
+            # the corresponding coulumn in revord_df is 'Sold To No.', 'Ship To No.', 'Main Customer', 'CPN', 'Material entered'
+            # if the row has one value in the column, it will add the comment to the 'DDL block' column
+            # only check the not nan value in exception_df
+            if pd.notna(row['Sold To No.']) and any(self.exception_df['sold-to'] == row['Sold To No.']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Ship To No.']) and any(self.exception_df['ship-to'] == row['Ship To No.']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Main Customer']) and any(self.exception_df['MC'] == row['Main Customer']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['CPN']) and any(self.exception_df['CPN'] == row['CPN']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+            if pd.notna(row['Material entered']) and any(self.exception_df['SP'] == row['Material entered']):
+                if pd.notna(self.revord_df.at[index, 'DDL block']) and self.revord_df.at[index, 'DDL block'] != '':
+                    self.revord_df.at[index, 'DDL block'] += '; ' + comment_to_add
+                elif comment_to_add in self.revord_df.at[index, 'DDL block']:
+                    continue
+                else:
+                    self.revord_df.at[index, 'DDL block'] = comment_to_add
+
     def add_stock(self):
         # Ensure that 'Stock' column exists in revord_df
         if 'Stock' not in self.revord_df.columns:
@@ -147,7 +208,6 @@ class operator(object):
         for index, revord_row in self.revord_df.iterrows():
             # Find matching rows in stock_df
             matching_rows = self.stock_df[
-                (self.stock_df['SP'] == revord_row['Material entered']) &
                 (self.stock_df['Plnt'] == revord_row['Plant']) &
                 (self.stock_df['Material'] == revord_row['Material'])
             ]
@@ -208,10 +268,14 @@ class operator(object):
                 dw = int(row['Del Window Minus'])
             if type(row['EETT']) == str:
                 eett = int(row['EETT'].split(',')[0])
+            elif type(row['EETT']) == int:
+                pass
             else:
                 eett = 0
             if type(row['ETT']) == str:
                 ett = int(row['ETT'].split(',')[0])
+            elif type(row['ETT']) == int:
+                pass
             else:
                 ett = 0
 
@@ -223,7 +287,7 @@ class operator(object):
                 if self.cal_date(goods_issue_date, dw) <= last_working_day:
                     if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
                         self.revord_df.at[index, 'Remark'] = 'Open AT'
-                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(last_working_day, dw) # last_working_day - dw
+                        self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(goods_issue_date, dw) # last_working_day - dw
                     else:
                         self.revord_df.at[index, 'Remark'] = 'DW potential'
                         self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(goods_issue_date, dw) # goods_issue_date - dw
@@ -287,7 +351,6 @@ class operator(object):
                         # 不能出货
                         self.revord_df.at[index, 'Arrange stock'] = 0
 
-
     def save(self):
         # Format dates in the DataFrame
         self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
@@ -295,7 +358,7 @@ class operator(object):
         self.revord_df['Delivery Date'] = self.revord_df['Delivery Date'].dt.strftime('%Y/%m/%d')
 
         # Define the Excel file path
-        file_path = os.path.join(self.save_path, 'infineon revenue.xlsx')
+        file_path = os.path.join(self.save_path, 'original data.xlsx')
 
         # Use a context manager to handle the ExcelWriter
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
@@ -316,3 +379,31 @@ class operator(object):
                 cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
                 cell.alignment = Alignment(horizontal='center', vertical='center')
                 cell.font = Font(bold=True)
+        
+        # find the 'arrange stock' == 1
+        self.df = self.revord_df[self.revord_df['Arrange stock'] == 1]
+        # only save the columns we need
+        columns = ['Sales Office', 'Description', 'Sold To No.', 'Ship To No.', 'Sales Document Type', 'CPN', 'leaf seller', 'Material entered', 'Material', 'shipping point', 'Sales Document', 'Sales Document Item', 'Open Quantity', 'Customer requested date', 'Transit', 'Allocation policy', 'Open Quantity', 'Proposed PGI']
+        df_template = self.df[columns]
+        # write the template to excel
+        file_path_template = os.path.join(self.save_path, 'infineon revenue.xlsx')
+                # Use a context manager to handle the ExcelWriter
+        with pd.ExcelWriter(file_path_template, engine='openpyxl') as writer:
+            # Write the DataFrame to an Excel file
+            df_template.to_excel(writer, sheet_name='RevOrd', index=False)
+
+            # Access the workbook and sheet for formatting
+            worksheet = writer.sheets['RevOrd']
+
+            # Set the column width with every column width
+            for col in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in col)
+                adjusted_width = (max_length + 2) * 1.2
+                worksheet.column_dimensions[col[0].column_letter].width = adjusted_width
+
+            # Set header style
+            for cell in worksheet[1]:
+                cell.fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.font = Font(bold=True)
+        
