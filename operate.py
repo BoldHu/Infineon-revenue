@@ -269,13 +269,13 @@ class operator(object):
             if type(row['EETT']) == str:
                 eett = int(row['EETT'].split(',')[0])
             elif type(row['EETT']) == int:
-                pass
+                eett = row['EETT']
             else:
                 eett = 0
             if type(row['ETT']) == str:
                 ett = int(row['ETT'].split(',')[0])
             elif type(row['ETT']) == int:
-                pass
+                ett = row['ETT']
             else:
                 ett = 0
 
