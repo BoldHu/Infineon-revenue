@@ -111,7 +111,6 @@ class operator(object):
             if not matching_rows.empty:
                 # Assuming the first matching row is the relevant one
                 matching_row = matching_rows.iloc[0]
-
                 # Update 'shipping point', 'EETT', 'ETT', 'CPN' in revord_df with values from dn_df
                 self.revord_df.at[index, 'shipping point'] = matching_row['ShPt']
                 # check nan, padding with 0
@@ -135,18 +134,22 @@ class operator(object):
         self.revord_df['Transit'] = self.revord_df['EETT'] + self.revord_df['ETT']
     
     def dn_check(self):
+        # Prepare the comment to be added
+        comment_to_add = 'CPN+Plant block'
+
+        # Get the first and second column names of CPN_df
+        first_column = self.CPN_df.columns[0]
+        # the first column convert to str
+        for index, value in self.CPN_df[first_column].items():
+            if type(value) != str:
+                self.CPN_df.at[index, first_column] = str(value)
+        # the second column removed the number
+        self.CPN_df[self.CPN_df.columns[1]] = self.CPN_df[self.CPN_df.columns[1]].str.replace(r'\d+', '', regex=True)
+
+        second_column = self.CPN_df.columns[1]
+        
         # Iterate through each row in revord_df
         for index, row in self.revord_df.iterrows():
-            # Prepare the comment to be added
-            comment_to_add = 'CPN+Plant block'
-
-            # Get the first and second column names of CPN_df
-            first_column = self.CPN_df.columns[0]
-            # the second column removed the number
-            self.CPN_df[self.CPN_df.columns[1]] = self.CPN_df[self.CPN_df.columns[1]].str.replace(r'\d+', '', regex=True)
-
-            second_column = self.CPN_df.columns[1]
-
             # Check if there is a matching row in self.CPN_df
             if any((self.CPN_df[first_column] == row['CPN']) & (self.CPN_df[second_column] == row['Plant2'])):
                 # Check if 'DDL block' column already has a value
@@ -296,9 +299,9 @@ class operator(object):
                         self.revord_df.at[index, 'Remark'] = 'Due CRD with late GI'
                         self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
                     else:
-                        if self.cal_date(date=crd, dw=ett+eett) <= last_working_day:
+                        if self.cal_date(date=crd, dw=ett+eett+dw) <= last_working_day:
                             self.revord_df.at[index, 'Remark'] = 'CRD potential with late GI'
-                            self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett) # crd - ett - eett
+                            self.revord_df.at[index, 'Proposed PGI'] = self.cal_date(date=crd, dw=ett+eett+dw) # crd - ett - eett
                         else:
                             self.revord_df.at[index, 'Remark'] = 'No potential'
                             self.revord_df.at[index, 'Proposed PGI'] = None
@@ -317,7 +320,7 @@ class operator(object):
             if not matching_rows.empty:
                 priority = matching_rows.iloc[0]['Calculated JIRA Prio']
                 self.revord_df.at[index, 'Priority'] = priority
-            self.revord_df.at[index, 'sum of value'] = row['Priority'] * row['Net Value In EUR']
+            self.revord_df.at[index, 'sum of value'] = self.revord_df.at[index, 'Priority'] * row['Net Value In EUR']
 
         # 定义'Remark'的自定义排序函数
         def remark_sorter(remark):
@@ -333,7 +336,7 @@ class operator(object):
         grouped = self.revord_df.groupby(['Material entered', 'Plant'])
 
         for name, group in grouped:
-            # 首先按'Remark'优先级排序，然后按'sum of value'排序
+            # 首先按'Remark'优先级排序，然后按'sum of value'排序，都是降序
             sorted_group = group.sort_values(by=['Remark', 'sum of value'], key=lambda x: x.map(remark_sorter) if x.name == 'Remark' else x, ascending=[True, False])
 
             # 初始化rest_stock
@@ -343,7 +346,7 @@ class operator(object):
                 if pd.notna(row['DDL block']) or row['Stock'] == 0 or row['Remark'] == "No potential":
                     self.revord_df.at[index, 'Arrange stock'] = -1
                 else:
-                    if rest_stock > row['Open Quantity']:
+                    if rest_stock >= row['Open Quantity']:
                         # 可以出货
                         self.revord_df.at[index, 'Arrange stock'] = 1
                         rest_stock -= row['Open Quantity']
@@ -352,6 +355,22 @@ class operator(object):
                         self.revord_df.at[index, 'Arrange stock'] = 0
 
     def save(self):
+        # add a column 'Proposed PGI Day' to the revord_df which compares with today, if the value is less than today and is not None, it will be converted to today
+        today = datetime.today().date()
+        for index, row in self.revord_df.iterrows():
+            if pd.isnull(row['Proposed PGI']):
+                continue
+            elif isinstance(row['Proposed PGI'], pd.Timestamp):
+                proposed_pgi = row['Proposed PGI'].date()
+            elif isinstance(row['Proposed PGI'], str):
+                proposed_pgi = datetime.strptime(row['Proposed PGI'], '%Y-%m-%d').date()
+            # if it is datetime.date
+            else:
+                proposed_pgi = row['Proposed PGI']
+            if proposed_pgi < today:
+                self.revord_df.at[index, 'Proposed PGI Day'] = today
+            else:
+                self.revord_df.at[index, 'Proposed PGI Day'] = proposed_pgi
         # Format dates in the DataFrame
         self.revord_df['Customer requested date'] = self.revord_df['Customer requested date'].dt.strftime('%Y/%m/%d')
         self.revord_df['Goods Issue Date'] = self.revord_df['Goods Issue Date'].dt.strftime('%Y/%m/%d')
@@ -383,7 +402,7 @@ class operator(object):
         # find the 'arrange stock' == 1
         self.df = self.revord_df[self.revord_df['Arrange stock'] == 1]
         # only save the columns we need
-        columns = ['Sales Office', 'Description', 'Sold To No.', 'Ship To No.', 'Sales Document Type', 'CPN', 'leaf seller', 'Material entered', 'Material', 'shipping point', 'Sales Document', 'Sales Document Item', 'Open Quantity', 'Customer requested date', 'Transit', 'Allocation policy', 'Open Quantity', 'Proposed PGI']
+        columns = ['Sales Office', 'Description', 'Sold To No.', 'Ship To No.', 'Sales Document Type', 'CPN', 'leaf seller', 'Material entered', 'Material', 'shipping point', 'Sales Document', 'Sales Document Item', 'Open Quantity', 'Customer requested date', 'Transit', 'Allocation policy', 'Open Quantity', 'Proposed PGI Day']
         df_template = self.df[columns]
         # write the template to excel
         file_path_template = os.path.join(self.save_path, 'infineon revenue.xlsx')
